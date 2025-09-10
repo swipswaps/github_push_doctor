@@ -1,19 +1,32 @@
 #!/usr/bin/env python3
 """
-GitHub Push Assistant for flowCFD
-==================================
-Interactive script to guide users through pushing their project to GitHub
-with human-in-the-loop prompts, YAML config, and gh auth detection.
+GitHub Push Assistant for flowCFD (Docker-ready)
+================================================
+Interactive, robust assistant to push any folder to GitHub.
+- Saves configuration to github_push_config.yaml
+- Detects dependencies: PyYAML, gh CLI, asciinema
+- Enhanced logging, error reporting, and UX
 """
 
 import os
-import subprocess
 import sys
-import yaml
+import subprocess
+import shutil
 from pathlib import Path
 
-CONFIG_FILE = "github_push_config.yaml"
+# Optional YAML support
+try:
+    import yaml
+    YAML_AVAILABLE = True
+except ImportError:
+    YAML_AVAILABLE = False
 
+CONFIG_FILE = "github_push_config.yaml"
+LOG_FILE = "github_push_assistant.log"
+
+# ----------------------
+# ANSI colors for terminal
+# ----------------------
 class Colors:
     GREEN = '\033[92m'
     YELLOW = '\033[93m'
@@ -22,153 +35,204 @@ class Colors:
     BOLD = '\033[1m'
     END = '\033[0m'
 
-def print_step(step_num, title, description=""):
-    print(f"\n{Colors.BOLD}{Colors.BLUE}=== STEP {step_num}: {title} ==={Colors.END}")
-    if description:
-        print(f"{Colors.YELLOW}{description}{Colors.END}")
+# ----------------------
+# Logging function (tee style)
+# ----------------------
+def log(message, level="INFO"):
+    """Log to stdout and append to LOG_FILE"""
+    with open(LOG_FILE, "a") as f:
+        f.write(f"[{level}] {message}\n")
+    print(message)
 
-def print_success(msg): print(f"{Colors.GREEN}✅ {msg}{Colors.END}")
-def print_warning(msg): print(f"{Colors.YELLOW}⚠️  {msg}{Colors.END}")
-def print_error(msg): print(f"{Colors.RED}❌ {msg}{Colors.END}")
-
-def run_command(cmd, capture_output=True, check=True):
+# ----------------------
+# System command execution
+# ----------------------
+def run_command(command, check=True, capture_output=True):
+    """Run a system command with output logging"""
+    log(f"$ {command}")
     try:
-        result = subprocess.run(cmd, shell=True, capture_output=capture_output, text=True, check=check)
+        result = subprocess.run(
+            command,
+            shell=True,
+            text=True,
+            capture_output=capture_output,
+            check=check
+        )
+        if capture_output:
+            if result.stdout.strip():
+                log(result.stdout.strip(), "OUTPUT")
+            if result.stderr.strip():
+                log(result.stderr.strip(), "ERROR")
         return result.returncode == 0, result.stdout.strip(), result.stderr.strip()
     except subprocess.CalledProcessError as e:
+        log(f"Command failed: {e}", "ERROR")
+        if e.stdout:
+            log(e.stdout, "OUTPUT")
+        if e.stderr:
+            log(e.stderr, "ERROR")
         return False, e.stdout, e.stderr
 
+# ----------------------
+# User input and confirmation
+# ----------------------
 def get_user_input(prompt, default=None):
     if default:
-        user_input = input(f"{prompt} [{default}]: ").strip()
-        return user_input if user_input else default
+        value = input(f"{prompt} [{default}]: ").strip()
+        return value if value else default
     else:
         return input(f"{prompt}: ").strip()
 
 def confirm_action(message):
     while True:
         resp = input(f"{message} (y/n): ").strip().lower()
-        if resp in ['y', 'yes']: return True
-        elif resp in ['n', 'no']: return False
-        print("Please enter 'y' or 'n'.")
+        if resp in ["y","yes"]:
+            return True
+        elif resp in ["n","no"]:
+            return False
+        else:
+            log("Please enter 'y' or 'n'.")
 
-def check_git_installed():
-    success, _, _ = run_command("git --version")
-    return success
+# ----------------------
+# Dependency checks
+# ----------------------
+def check_git():
+    ok, _, _ = run_command("git --version", check=False)
+    if ok:
+        log("Git is installed.", "SUCCESS")
+    else:
+        log("Git not found. Install git first.", "ERROR")
+    return ok
 
-def check_git_config():
-    name_s, name, _ = run_command("git config user.name")
-    email_s, email, _ = run_command("git config user.email")
-    return name_s and email_s, name, email
+def check_gh():
+    ok, _, _ = run_command("gh --version", check=False)
+    if ok:
+        log("GitHub CLI detected.", "SUCCESS")
+    else:
+        log("GitHub CLI not found. Install gh CLI for automated remote creation.", "WARNING")
+    return ok
 
-def load_config():
-    if Path(CONFIG_FILE).exists():
-        with open(CONFIG_FILE, "r") as f:
-            return yaml.safe_load(f) or {}
-    return {}
-
-def save_config(cfg):
-    with open(CONFIG_FILE, "w") as f:
-        yaml.dump(cfg, f)
-
-def check_gh_authenticated():
-    success, output, _ = run_command("gh auth status", check=False)
-    return success and "Logged in" in output
-
-def main():
-    print(f"{Colors.BOLD}{Colors.GREEN}🚀 GitHub Push Assistant{Colors.END}\n")
-    cfg = load_config()
-
-    # STEP 0: Git Prerequisites
-    print_step(0, "PREREQUISITES CHECK")
-    if not check_git_installed():
-        print_error("Git is not installed. Install git first.")
+def check_asciinema():
+    if shutil.which("asciinema"):
+        log("Asciinema detected.", "SUCCESS")
+        return True
+    else:
+        log("Asciinema not found. Recording disabled.", "WARNING")
         return False
-    print_success("Git installed")
 
-    cfg["project_path"] = get_user_input("Project path", cfg.get("project_path", str(Path.cwd())))
-    Path(cfg["project_path"]).mkdir(parents=True, exist_ok=True)
-    os.chdir(cfg["project_path"])
-    print_success(f"Working in: {cfg['project_path']}")
-
-    # STEP 1: Git config
-    config_ok, username, email = check_git_config()
-    if not config_ok:
-        print_warning("Git user not configured")
-        if confirm_action("Configure now?"):
-            name = get_user_input("Enter your full name")
-            email = get_user_input("Enter your email")
-            run_command(f'git config --global user.name "{name}"')
-            run_command(f'git config --global user.email "{email}"')
-            print_success("Git config updated")
+def check_pyyaml():
+    if YAML_AVAILABLE:
+        log(f"PyYAML detected.", "SUCCESS")
+        return True
     else:
-        print_success(f"Git configured for {username} <{email}>")
+        log(f"PyYAML >=6.0 not installed. YAML persistence disabled.", "WARNING")
+        return False
 
-    # STEP 2: GitHub Authentication (gh)
-    print_step(2, "GITHUB AUTHENTICATION")
-    if check_gh_authenticated():
-        print_success("gh CLI already authenticated")
+# ----------------------
+# Configuration management
+# ----------------------
+def load_config():
+    if check_pyyaml() and Path(CONFIG_FILE).exists():
+        try:
+            with open(CONFIG_FILE,"r") as f:
+                config = yaml.safe_load(f) or {}
+            log(f"Loaded config from {CONFIG_FILE}")
+            return config
+        except Exception as e:
+            log(f"Failed to load config: {e}", "ERROR")
+            return {}
     else:
-        if confirm_action("gh CLI not authenticated. Authenticate now?"):
-            run_command("gh auth login", capture_output=False)
-            if not check_gh_authenticated():
-                print_error("Authentication failed.")
-                return False
-            print_success("gh CLI authenticated successfully")
+        return {}
 
-    # Save project path in config
-    cfg["project_path"] = str(Path.cwd())
-    save_config(cfg)
+def save_config(config):
+    if check_pyyaml():
+        try:
+            with open(CONFIG_FILE,"w") as f:
+                yaml.safe_dump(config,f)
+            log(f"Saved config to {CONFIG_FILE}")
+        except Exception as e:
+            log(f"Failed to save config: {e}", "ERROR")
 
-    # STEP 3: Git Repo Initialization
-    print_step(3, "GIT REPOSITORY CHECK")
+# ----------------------
+# Main workflow
+# ----------------------
+def main():
+    log(f"{Colors.BOLD}{Colors.GREEN}🔧 GitHub Push Assistant{Colors.END}")
+
+    # Load previous configuration
+    config = load_config()
+    
+    # Step 1: Select project folder
+    default_path = config.get("project_path", str(Path.cwd()))
+    project_path = get_user_input("Project path", default_path)
+    project_path = str(Path(project_path).resolve())
+    log(f"Working in: {project_path}")
+    config["project_path"] = project_path
+    
+    os.chdir(project_path)
+
+    # Step 2: Check git, gh, asciinema
+    if not check_git():
+        return False
+    gh_installed = check_gh()
+    asciinema_installed = check_asciinema()
+    
+    # Step 3: GitHub authentication
+    if gh_installed:
+        ok, _, _ = run_command("gh auth status", check=False)
+        if not ok:
+            if confirm_action("gh CLI not authenticated. Run 'gh auth login'?"):
+                run_command("gh auth login")
+    
+    # Step 4: Determine repo name
+    default_repo = config.get("repo_name", Path(project_path).name)
+    repo_name = get_user_input("GitHub repo name", default_repo)
+    config["repo_name"] = repo_name
+
+    # Step 5: Default branch
+    default_branch = config.get("default_branch","main")
+    branch_name = get_user_input("Default branch", default_branch)
+    config["default_branch"] = branch_name
+
+    # Step 6: Commit message
+    default_commit = config.get("commit_message","update project")
+    commit_msg = get_user_input("Commit message", default_commit)
+    config["commit_message"] = commit_msg
+
+    # Save current config
+    save_config(config)
+
+    # Step 7: Initialize repo if needed
     if not (Path(".git").exists()):
-        print("⚙️ Initializing new git repo...")
+        log("⚙️ Initializing new git repo...")
         run_command("git init")
-        run_command("git branch -M main")
-        print_success("Git repository initialized")
+        run_command(f"git branch -M {branch_name}")
 
-    # STEP 4: Remote check & create
-    print_step(4, "REMOTE CHECK")
-    success, remote_out, _ = run_command("git remote -v")
-    if not success or not remote_out:
-        repo_name = get_user_input("GitHub repo name", cfg.get("repo_name", Path.cwd().name))
-        cfg["repo_name"] = repo_name
-        save_config(cfg)
-        # Use gh to create
-        push_choice = confirm_action("Create GitHub repo and push?")
-        if push_choice:
-            success, _, _ = run_command(f"gh repo create {repo_name} --source=. --public --push", check=False)
-            if success:
-                print_success(f"Repo {repo_name} created and pushed")
-            else:
-                print_error("Failed to create repo via gh")
-                return False
-
-    # STEP 5: Stage & Commit
-    print_step(5, "STAGE AND COMMIT")
+    # Step 8: Stage all files
+    log("➕ Staging all files...")
     run_command("git add .")
-    commit_msg = get_user_input("Commit message", cfg.get("last_commit_msg", "update project"))
-    cfg["last_commit_msg"] = commit_msg
-    save_config(cfg)
+
+    # Step 9: Commit changes
+    log("💬 Committing...")
     run_command(f'git commit -m "{commit_msg}"', check=False)
-    print_success("Changes committed")
 
-    # STEP 6: Push
-    print_step(6, "PUSH TO GITHUB")
-    run_command("git push origin main", check=False)
-    print_success("Push completed (verify on GitHub)")
+    # Step 10: Create GitHub repo if gh CLI present
+    if gh_installed:
+        log(f"🌐 Creating GitHub repo {repo_name}...")
+        run_command(f"gh repo create {repo_name} --source=. --public --push", check=False)
 
-    print_success("🎉 All steps completed successfully!")
+    log(f"{Colors.GREEN}✅ Push workflow complete. Review logs and GitHub repo.{Colors.END}")
     return True
 
+# ----------------------
+# Entry point
+# ----------------------
 if __name__ == "__main__":
     try:
         success = main()
         sys.exit(0 if success else 1)
     except KeyboardInterrupt:
-        print(f"\n{Colors.YELLOW}Push cancelled by user.{Colors.END}")
+        log("User cancelled.", "WARNING")
         sys.exit(1)
     except Exception as e:
-        print(f"\n{Colors.RED}Unexpected error: {e}{Colors.END}")
+        log(f"Unexpected error: {e}", "ERROR")
         sys.exit(1)

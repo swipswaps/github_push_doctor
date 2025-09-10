@@ -1,4 +1,5 @@
-commit_message: cursor generated.bak, chatGPT upgraded
+commit_message: Docker integrat
 default_branch: main
+last_commit_msg: updated .py to detect gh auth status prior to push
 project_path: /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940
 repo_name: github_push_assistant
