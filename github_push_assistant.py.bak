@@ -1,0 +1,405 @@
+#!/usr/bin/env python3
+"""
+GitHub Push Assistant (generalized)
+==================================
+Interactive assistant to help push any project folder to GitHub.
+
+Features:
+ - Works on any project folder (default: current directory)
+ - Detects git/gh availability and uses gh when possible
+ - Initializes git repo if missing
+ - Stages files (with .gitignore respected)
+ - Commits with a sensible default message (editable)
+ - Creates GitHub repo via `gh` or accepts a provided remote URL
+ - Pushes and sets upstream
+ - Interactive but supports --yes for automation and --dry-run for previews
+ - Uses subprocess (no external Python packages required)
+"""
+
+from __future__ import annotations
+import argparse
+import logging
+import os
+import shlex
+import subprocess
+import sys
+from pathlib import Path
+from typing import Optional, Tuple, Union
+
+# -------- Configuration & Logging --------
+LOGFILE = "github_push_assistant.log"
+logging.basicConfig(
+    filename=LOGFILE,
+    level=logging.DEBUG,
+    format="%(asctime)s %(levelname)s %(message)s",
+)
+CONSOLE = logging.getLogger("console")
+CONSOLE.setLevel(logging.INFO)
+
+# ANSI colors (works on most UNIX terminals)
+class Colors:
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    BLUE = '\033[94m'
+    BOLD = '\033[1m'
+    END = '\033[0m'
+
+def cprint(msg: str, color: str = ""):
+    if color:
+        print(f"{color}{msg}{Colors.END}")
+    else:
+        print(msg)
+
+# -------- Utility subprocess wrapper --------
+def run_command(
+    cmd: Union[str, list],
+    capture_output: bool = True,
+    cwd: Optional[Union[str, Path]] = None,
+) -> Tuple[int, str, str]:
+    """
+    Run a command, return (returncode, stdout, stderr).
+    Accepts string or list. Uses shlex.split for strings.
+    """
+    if isinstance(cmd, str):
+        args = shlex.split(cmd)
+    else:
+        args = cmd
+
+    logging.debug("Running command: %s (cwd=%s)", args, cwd)
+    try:
+        proc = subprocess.run(
+            args,
+            cwd=str(cwd) if cwd else None,
+            capture_output=capture_output,
+            text=True,
+            check=False,
+        )
+        stdout = proc.stdout.strip() if proc.stdout else ""
+        stderr = proc.stderr.strip() if proc.stderr else ""
+        logging.debug("Returncode: %s, stdout: %s, stderr: %s", proc.returncode, stdout, stderr)
+        return proc.returncode, stdout, stderr
+    except FileNotFoundError as e:
+        logging.debug("Command not found: %s", args)
+        return 127, "", str(e)
+    except Exception as e:
+        logging.exception("Unexpected error running command: %s", cmd)
+        return 1, "", str(e)
+
+# -------- Interactivity helpers --------
+def confirm(prompt: str, assume_yes: bool = False) -> bool:
+    if assume_yes:
+        cprint(f"[auto-yes] {prompt} -> yes", Colors.YELLOW)
+        return True
+    while True:
+        try:
+            ans = input(f"{prompt} (y/n): ").strip().lower()
+        except KeyboardInterrupt:
+            cprint("\nCancelled by user.", Colors.YELLOW)
+            sys.exit(1)
+        if ans in ("y", "yes"):
+            return True
+        if ans in ("n", "no"):
+            return False
+        print("Please enter 'y' or 'n'.")
+
+def prompt_input(prompt: str, default: Optional[str] = None) -> str:
+    if default:
+        txt = input(f"{prompt} [{default}]: ").strip()
+        return txt if txt else default
+    else:
+        return input(f"{prompt}: ").strip()
+
+# -------- Git / GitHub helpers --------
+def check_executable(name: str) -> bool:
+    rc, out, err = run_command([name, "--version"])
+    return rc == 0
+
+def is_git_repo(path: Path) -> bool:
+    rc, out, err = run_command(["git", "rev-parse", "--is-inside-work-tree"], cwd=path)
+    return rc == 0 and out.strip() == "true"
+
+def ensure_git_config(assume_yes: bool, cwd: Path) -> bool:
+    name_rc, name, _ = run_command(["git", "config", "--get", "user.name"], cwd=cwd)
+    email_rc, email, _ = run_command(["git", "config", "--get", "user.email"], cwd=cwd)
+    if name and email:
+        cprint(f"Git user is configured: {name} <{email}>", Colors.GREEN)
+        return True
+
+    cprint("git user.name and/or user.email not configured.", Colors.YELLOW)
+    if not confirm("Would you like to configure them now?", assume_yes):
+        cprint("You can configure them later with `git config --global user.name 'Your Name'`", Colors.YELLOW)
+        return False
+
+    n = prompt_input("Enter your full name")
+    e = prompt_input("Enter your email address")
+    run_command(["git", "config", "--global", "user.name", n])
+    run_command(["git", "config", "--global", "user.email", e])
+    cprint(f"Configured git user as: {n} <{e}>", Colors.GREEN)
+    return True
+
+def get_current_branch(cwd: Path) -> Optional[str]:
+    rc, out, err = run_command(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=cwd)
+    if rc != 0:
+        return None
+    if out.strip() == "HEAD":
+        return None
+    return out.strip()
+
+def set_default_branch_to_main(cwd: Path) -> bool:
+    rc, out, err = run_command(["git", "branch", "-M", "main"], cwd=cwd)
+    return rc == 0
+
+def remote_origin_url(cwd: Path) -> Optional[str]:
+    rc, out, err = run_command(["git", "remote", "get-url", "origin"], cwd=cwd)
+    return out.strip() if rc == 0 and out.strip() else None
+
+def stage_all(cwd: Path) -> bool:
+    rc, out, err = run_command(["git", "add", "--all"], cwd=cwd)
+    return rc == 0
+
+def staged_files_exist(cwd: Path) -> bool:
+    rc, out, err = run_command(["git", "diff", "--cached", "--name-only"], cwd=cwd)
+    return bool(out.strip())
+
+def untracked_files(cwd: Path) -> list:
+    rc, out, err = run_command(["git", "ls-files", "--others", "--exclude-standard"], cwd=cwd)
+    if rc != 0 or not out.strip():
+        return []
+    return [line.strip() for line in out.splitlines() if line.strip()]
+
+def create_commit(message: str, cwd: Path) -> Tuple[bool, str]:
+    rc, out, err = run_command(["git", "commit", "-m", message], cwd=cwd)
+    if rc == 0:
+        return True, out
+    return False, err
+
+def push_to_remote(branch: str, cwd: Path) -> Tuple[bool, str]:
+    rc, out, err = run_command(["git", "push", "-u", "origin", branch], capture_output=True, cwd=cwd)
+    if rc == 0:
+        return True, out
+    return False, err
+
+# -------- Main flow --------
+def main():
+    parser = argparse.ArgumentParser(description="GitHub Push Assistant (generalized)")
+    parser.add_argument("directory", nargs="?", default=str(Path.cwd()), help="Project directory (default: current folder)")
+    parser.add_argument("--yes", "-y", action="store_true", help="Assume yes for all prompts (non-interactive)")
+    parser.add_argument("--dry-run", action="store_true", help="Show actions but don't execute them")
+    parser.add_argument("--branch", help="Force branch name (defaults to existing or 'main')")
+    args = parser.parse_args()
+
+    project_dir = Path(args.directory).expanduser().resolve()
+    assume_yes = args.yes
+    dry_run = args.dry_run
+    forced_branch = args.branch
+
+    if not project_dir.exists():
+        cprint(f"Directory does not exist: {project_dir}", Colors.RED)
+        sys.exit(1)
+
+    cprint(f"{Colors.BOLD}📁 Project directory: {project_dir}{Colors.END}", Colors.BLUE)
+    logging.info("Starting assistant for directory: %s", project_dir)
+
+    # Check prerequisites
+    if not check_executable("git"):
+        cprint("git is not installed or not available in PATH. Please install git first.", Colors.RED)
+        cprint("On Debian/Ubuntu: sudo apt-get install git", Colors.YELLOW)
+        sys.exit(1)
+    cprint("Git available.", Colors.GREEN)
+
+    gh_available = check_executable("gh")
+    if gh_available:
+        cprint("GitHub CLI (gh) detected — will prefer gh for repository creation when possible.", Colors.GREEN)
+    else:
+        cprint("GitHub CLI (gh) not found. The script will fall back to manual remote URL configuration.", Colors.YELLOW)
+
+    # Change into project dir for git commands
+    os.chdir(str(project_dir))
+
+    # Ensure / offer to init git repo if missing
+    if not is_git_repo(project_dir):
+        cprint("No git repository detected in this folder.", Colors.YELLOW)
+        if not confirm("Initialize a new git repository here?", assume_yes):
+            cprint("A git repository is required. Exiting.", Colors.RED)
+            sys.exit(1)
+        if dry_run:
+            cprint("[dry-run] git init", Colors.YELLOW)
+        else:
+            rc, out, err = run_command(["git", "init"], cwd=project_dir)
+            if rc != 0:
+                cprint(f"Failed to initialize git repository: {err}", Colors.RED)
+                sys.exit(1)
+            cprint("Git repository initialized.", Colors.GREEN)
+            # set branch to main where appropriate
+            set_default_branch_to_main(project_dir)
+    else:
+        cprint("Git repository found.", Colors.GREEN)
+
+    # Ensure git user configured
+    ensure_git_config(assume_yes, project_dir)
+
+    # Determine branch
+    branch = forced_branch or get_current_branch(project_dir)
+    if not branch:
+        branch = "main"
+        cprint(f"No branch detected — defaulting to '{branch}'.", Colors.YELLOW)
+        if not dry_run:
+            set_default_branch_to_main(project_dir)
+
+    cprint(f"Using branch: {branch}", Colors.BLUE)
+
+    # Show status and ask whether to stage
+    rc, status_out, status_err = run_command(["git", "status", "--porcelain"], cwd=project_dir)
+    if status_out.strip():
+        cprint("Changes detected (git status --porcelain):", Colors.YELLOW)
+        print(status_out)
+    else:
+        cprint("No local changes detected.", Colors.YELLOW)
+
+    if not confirm("Stage all changes (respects .gitignore)?", assume_yes):
+        cprint("Skipping automatic staging. You can stage files manually with 'git add <file>'.", Colors.YELLOW)
+    else:
+        if dry_run:
+            cprint("[dry-run] git add --all", Colors.YELLOW)
+        else:
+            if stage_all(project_dir):
+                cprint("All changes staged (git add --all).", Colors.GREEN)
+            else:
+                cprint("Warning: git add failed (see log).", Colors.RED)
+
+    # If nothing staged, offer to stage untracked or abort
+    if not staged_files_exist(project_dir):
+        cprint("No staged files detected.", Colors.YELLOW)
+        untracked = untracked_files(project_dir)
+        if untracked:
+            cprint(f"Found {len(untracked)} untracked files (showing up to 20):", Colors.YELLOW)
+            for f in untracked[:20]:
+                print("  ", f)
+            if confirm("Stage these untracked files (selective based on file types)?", assume_yes):
+                # stage sensible file types
+                to_stage = [f for f in untracked if f.endswith(('.py', '.js', '.ts', '.json', '.md', '.txt', '.html', '.css'))]
+                if not to_stage:
+                    cprint("No matching untracked files to stage automatically.", Colors.YELLOW)
+                else:
+                    for f in to_stage:
+                        if dry_run:
+                            cprint(f"[dry-run] git add {f}", Colors.YELLOW)
+                        else:
+                            run_command(["git", "add", f], cwd=project_dir)
+                            cprint(f"Staged: {f}", Colors.GREEN)
+        else:
+            cprint("No untracked files found either.", Colors.YELLOW)
+
+    # Final check for staged content
+    if not staged_files_exist(project_dir):
+        cprint("Nothing staged — aborting commit step. Stage files manually or rerun with --yes to auto-stage.", Colors.RED)
+        if not confirm("Continue without creating a commit (proceed to remote configuration and push)?", assume_yes):
+            sys.exit(0)
+
+    # Commit
+    default_msg = f"chore: update {project_dir.name} — prepared for GitHub push"
+    commit_message = prompt_input("Enter commit message", default_msg)
+    if dry_run:
+        cprint(f"[dry-run] git commit -m \"{commit_message}\"", Colors.YELLOW)
+    else:
+        success, out = create_commit(commit_message, project_dir)
+        if success:
+            cprint("Commit created successfully.", Colors.GREEN)
+            cprint(out, Colors.BLUE)
+        else:
+            # Could be nothing to commit or other error
+            if "nothing to commit" in out.lower():
+                cprint("Nothing to commit - perhaps changes were not staged.", Colors.YELLOW)
+            else:
+                cprint(f"Commit failed: {out}", Colors.RED)
+                cprint("You can inspect the log file for details.", Colors.RED)
+                logging.error("Commit failed: %s", out)
+
+    # Remote check or creation
+    origin = remote_origin_url(project_dir)
+    if origin:
+        cprint(f"Remote 'origin' is already set to: {origin}", Colors.GREEN)
+    else:
+        cprint("No remote named 'origin' configured.", Colors.YELLOW)
+        if gh_available and confirm("Create a new GitHub repository and push using `gh` (recommended)?", assume_yes):
+            repo_name_input = prompt_input("Repository name (owner/name or name)", project_dir.name)
+            visibility = prompt_input("Visibility (public/private)", "public").lower()
+            visibility_flag = "--public" if visibility.startswith("p") and visibility != "private" else "--private"
+            gh_cmd = ["gh", "repo", "create", repo_name_input, "--source=.", "--remote=origin", "--push", visibility_flag]
+            # sanitize flags (gh expects flags in one arg or multiple)
+            # Convert to a flat list with no empty items
+            gh_cmd = [p for p in gh_cmd if p]
+            cprint(f"Creating repo with: {' '.join(gh_cmd)}", Colors.BLUE)
+            if dry_run:
+                cprint("[dry-run] " + " ".join(gh_cmd), Colors.YELLOW)
+            else:
+                rc, out, err = run_command(gh_cmd, cwd=project_dir)
+                if rc != 0:
+                    cprint(f"gh repo create failed: {err or out}", Colors.RED)
+                    cprint("You can create the repo manually on GitHub and then add a remote URL.", Colors.YELLOW)
+                    logging.error("gh create failed: %s", err or out)
+                else:
+                    cprint("GitHub repository created and remote 'origin' configured.", Colors.GREEN)
+                    origin = remote_origin_url(project_dir)
+        else:
+            # Ask for manual remote URL (HTTPS or SSH)
+            remote_url = prompt_input("Enter remote repository URL (SSH or HTTPS), or leave blank to skip")
+            if remote_url:
+                if dry_run:
+                    cprint(f"[dry-run] git remote add origin {remote_url}", Colors.YELLOW)
+                else:
+                    rc, out, err = run_command(["git", "remote", "add", "origin", remote_url], cwd=project_dir)
+                    if rc != 0:
+                        cprint(f"Failed to add remote: {err or out}", Colors.RED)
+                        logging.error("remote add failed: %s", err or out)
+                    else:
+                        cprint("Remote 'origin' added.", Colors.GREEN)
+                        origin = remote_origin_url(project_dir)
+            else:
+                cprint("No remote configured. You will need to add a remote manually before pushing.", Colors.YELLOW)
+
+    # Final push
+    origin = remote_origin_url(project_dir)
+    if not origin:
+        cprint("No remote to push to. Exiting.", Colors.RED)
+        sys.exit(1)
+
+    cprint(f"Pushing to remote: {origin} (branch {branch})", Colors.BLUE)
+    if dry_run:
+        cprint(f"[dry-run] git push -u origin {branch}", Colors.YELLOW)
+    else:
+        ok, out_or_err = push_to_remote(branch, project_dir)
+        if ok:
+            cprint("Successfully pushed to remote!", Colors.GREEN)
+            cprint(f"Remote URL: {origin}", Colors.BLUE)
+            # Offer to open in browser if gh is available
+            if gh_available and confirm("Open repository in your browser now (gh repo view --web)?", assume_yes):
+                if dry_run:
+                    cprint("[dry-run] gh repo view --web", Colors.YELLOW)
+                else:
+                    run_command(["gh", "repo", "view", "--web"], cwd=project_dir)
+        else:
+            cprint("Push failed:", Colors.RED)
+            print(out_or_err)
+            cprint("Common causes: authentication (ssh key or gh auth), permissions, or diverged branches.", Colors.YELLOW)
+            cprint("Suggested actions:", Colors.YELLOW)
+            print("  - Ensure you have write access to the repository")
+            print("  - If using HTTPS, ensure your credentials/token are correct")
+            print("  - If histories diverged, consider: git pull origin {branch} --allow-unrelated-histories")
+            sys.exit(1)
+
+    cprint("\n🎉 Done — your changes have been pushed to GitHub (origin).", Colors.GREEN)
+    cprint(f"Log written to: {LOGFILE}", Colors.BLUE)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        cprint("\nInterrupted by user.", Colors.YELLOW)
+        sys.exit(1)
+    except Exception as e:
+        cprint(f"\nUnexpected error: {e}", Colors.RED)
+        logging.exception("Unexpected failure")
+        sys.exit(1)
