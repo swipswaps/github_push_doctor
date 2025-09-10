@@ -1,32 +1,34 @@
 # GitHub Push Assistant
 
-A smooth, beginner-friendly assistant that stages, commits, and pushes your project to GitHub.  
-It remembers your preferences between runs using a YAML config file.
+A guided, interactive Python script to push any local project folder to GitHub.  
+Supports automatic repo creation, `gh` CLI integration, commit/branch management, and persistent YAML config.
 
 ---
 
-## 🚀 Features
-- Initializes a Git repo if missing
-- Saves answers in `github_push_config.yaml` for persistence
-- Reloads config and shows defaults on next run
-- Optional `--auto` flag for zero-interaction pushes
-- Uses [`gh`](https://cli.github.com/) for repo creation and push
-- Works in any project folder
+## Features
+
+- Detects Git installation and configuration
+- Validates GitHub authentication via `gh`
+- Guides user through project folder selection
+- Stages, commits, and pushes changes automatically
+- Creates GitHub repository if it doesn't exist
+- Saves all user choices in `github_push_config.yaml`
+- Re-loads config for future runs
+- Color-coded terminal output and smooth step-by-step UX
 
 ---
 
-## 📦 Requirements
-- Python 3.8+
+## Requirements
+
+- Python 3.7+
 - Git
-- GitHub CLI (`gh`) – must be authenticated (`gh auth login`)
-- PyYAML (`pip install -r requirements.txt`)
+- GitHub CLI (`gh`)
+- PyYAML (`pip install pyyaml`)
 
 ---
 
-## 🛠 Installation
-```bash
-# Clone or copy files into a folder
-cd ~/my-tools
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+## Usage
+
+1. Navigate to your project folder:
+   ```bash
+   cd /path/to/project

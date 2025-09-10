@@ -1,155 +1,174 @@
 #!/usr/bin/env python3
 """
-GitHub Push Assistant with Persistent Config
---------------------------------------------
-- Guides user through staging, committing, and pushing to GitHub
-- Persists preferences in github_push_config.yaml
-- Reloads config each run with editable defaults
-- Supports auto mode (--auto) for unattended pushes
+GitHub Push Assistant for flowCFD
+==================================
+Interactive script to guide users through pushing their project to GitHub
+with human-in-the-loop prompts, YAML config, and gh auth detection.
 """
 
+import os
 import subprocess
 import sys
-import shutil
-import argparse
+import yaml
 from pathlib import Path
 
-# Try to load YAML support
-try:
-    import yaml
-    HAS_YAML = True
-except ImportError:
-    HAS_YAML = False
+CONFIG_FILE = "github_push_config.yaml"
 
-CONFIG_FILE = Path("github_push_config.yaml")
+class Colors:
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    BLUE = '\033[94m'
+    BOLD = '\033[1m'
+    END = '\033[0m'
 
+def print_step(step_num, title, description=""):
+    print(f"\n{Colors.BOLD}{Colors.BLUE}=== STEP {step_num}: {title} ==={Colors.END}")
+    if description:
+        print(f"{Colors.YELLOW}{description}{Colors.END}")
 
-def run_cmd(cmd, check=True, capture=False):
-    """Run shell command safely."""
+def print_success(msg): print(f"{Colors.GREEN}✅ {msg}{Colors.END}")
+def print_warning(msg): print(f"{Colors.YELLOW}⚠️  {msg}{Colors.END}")
+def print_error(msg): print(f"{Colors.RED}❌ {msg}{Colors.END}")
+
+def run_command(cmd, capture_output=True, check=True):
     try:
-        if capture:
-            return subprocess.check_output(cmd, text=True).strip()
-        else:
-            subprocess.run(cmd, check=check)
+        result = subprocess.run(cmd, shell=True, capture_output=capture_output, text=True, check=check)
+        return result.returncode == 0, result.stdout.strip(), result.stderr.strip()
     except subprocess.CalledProcessError as e:
-        print(f"❌ Command failed: {' '.join(cmd)}\n{e}")
-        sys.exit(1)
+        return False, e.stdout, e.stderr
 
+def get_user_input(prompt, default=None):
+    if default:
+        user_input = input(f"{prompt} [{default}]: ").strip()
+        return user_input if user_input else default
+    else:
+        return input(f"{prompt}: ").strip()
 
-def ensure_dependency(tool):
-    """Check that a dependency is installed."""
-    if shutil.which(tool) is None:
-        print(f"❌ Required tool '{tool}' not found in PATH. Please install it.")
-        sys.exit(1)
+def confirm_action(message):
+    while True:
+        resp = input(f"{message} (y/n): ").strip().lower()
+        if resp in ['y', 'yes']: return True
+        elif resp in ['n', 'no']: return False
+        print("Please enter 'y' or 'n'.")
 
+def check_git_installed():
+    success, _, _ = run_command("git --version")
+    return success
+
+def check_git_config():
+    name_s, name, _ = run_command("git config user.name")
+    email_s, email, _ = run_command("git config user.email")
+    return name_s and email_s, name, email
 
 def load_config():
-    """Load config file if available."""
-    if CONFIG_FILE.exists() and HAS_YAML:
-        try:
-            with open(CONFIG_FILE, "r") as f:
-                return yaml.safe_load(f) or {}
-        except Exception as e:
-            print(f"⚠️ Failed to load config ({e}), starting fresh.")
-            return {}
+    if Path(CONFIG_FILE).exists():
+        with open(CONFIG_FILE, "r") as f:
+            return yaml.safe_load(f) or {}
     return {}
 
+def save_config(cfg):
+    with open(CONFIG_FILE, "w") as f:
+        yaml.dump(cfg, f)
 
-def save_config(config):
-    """Save config back to YAML."""
-    if HAS_YAML:
-        with open(CONFIG_FILE, "w") as f:
-            yaml.safe_dump(config, f, default_flow_style=False)
-    else:
-        print("⚠️ PyYAML not installed. Config will not persist.")
-
-
-def prompt(msg, default=None):
-    """Prompt user with default option."""
-    if default:
-        full = f"{msg} [{default}]: "
-    else:
-        full = f"{msg}: "
-    ans = input(full).strip()
-    return ans if ans else default
-
+def check_gh_authenticated():
+    success, output, _ = run_command("gh auth status", check=False)
+    return success and "Logged in" in output
 
 def main():
-    parser = argparse.ArgumentParser(description="GitHub Push Assistant")
-    parser.add_argument("--auto", action="store_true", help="Run non-interactively using saved config")
-    args = parser.parse_args()
+    print(f"{Colors.BOLD}{Colors.GREEN}🚀 GitHub Push Assistant{Colors.END}\n")
+    cfg = load_config()
 
-    # Ensure tools available
-    ensure_dependency("git")
-    ensure_dependency("gh")
+    # STEP 0: Git Prerequisites
+    print_step(0, "PREREQUISITES CHECK")
+    if not check_git_installed():
+        print_error("Git is not installed. Install git first.")
+        return False
+    print_success("Git installed")
 
-    config = load_config()
+    cfg["project_path"] = get_user_input("Project path", cfg.get("project_path", str(Path.cwd())))
+    Path(cfg["project_path"]).mkdir(parents=True, exist_ok=True)
+    os.chdir(cfg["project_path"])
+    print_success(f"Working in: {cfg['project_path']}")
 
-    # Interactive mode
-    if not args.auto:
-        print("\n🔧 GitHub Push Assistant\n")
-
-        project_path = prompt("Project path", config.get("project_path", str(Path.cwd())))
-        repo_name = prompt("GitHub repo name", config.get("repo_name", Path(project_path).name))
-        default_branch = prompt("Default branch", config.get("default_branch", "main"))
-        commit_message = prompt("Commit message", config.get("commit_message", "update project"))
-
-        config.update({
-            "project_path": project_path,
-            "repo_name": repo_name,
-            "default_branch": default_branch,
-            "commit_message": commit_message,
-        })
-
-        save_config(config)
+    # STEP 1: Git config
+    config_ok, username, email = check_git_config()
+    if not config_ok:
+        print_warning("Git user not configured")
+        if confirm_action("Configure now?"):
+            name = get_user_input("Enter your full name")
+            email = get_user_input("Enter your email")
+            run_command(f'git config --global user.name "{name}"')
+            run_command(f'git config --global user.email "{email}"')
+            print_success("Git config updated")
     else:
-        if not config:
-            print("❌ No config found. Run interactively first.")
-            sys.exit(1)
+        print_success(f"Git configured for {username} <{email}>")
 
-        project_path = config["project_path"]
-        repo_name = config["repo_name"]
-        default_branch = config["default_branch"]
-        commit_message = config["commit_message"]
+    # STEP 2: GitHub Authentication (gh)
+    print_step(2, "GITHUB AUTHENTICATION")
+    if check_gh_authenticated():
+        print_success("gh CLI already authenticated")
+    else:
+        if confirm_action("gh CLI not authenticated. Authenticate now?"):
+            run_command("gh auth login", capture_output=False)
+            if not check_gh_authenticated():
+                print_error("Authentication failed.")
+                return False
+            print_success("gh CLI authenticated successfully")
 
-    # Change to project path
-    project_path = Path(project_path).expanduser().resolve()
-    if not project_path.exists():
-        print(f"❌ Project path not found: {project_path}")
-        sys.exit(1)
-    print(f"\n📂 Working in: {project_path}")
-    os_cwd = Path.cwd()
-    import os
-    os.chdir(project_path)
+    # Save project path in config
+    cfg["project_path"] = str(Path.cwd())
+    save_config(cfg)
 
-    # Init repo if missing
-    if not (project_path / ".git").exists():
+    # STEP 3: Git Repo Initialization
+    print_step(3, "GIT REPOSITORY CHECK")
+    if not (Path(".git").exists()):
         print("⚙️ Initializing new git repo...")
-        run_cmd(["git", "init", "-b", default_branch])
+        run_command("git init")
+        run_command("git branch -M main")
+        print_success("Git repository initialized")
 
-    # Stage changes
-    print("➕ Staging changes...")
-    run_cmd(["git", "add", "."])
+    # STEP 4: Remote check & create
+    print_step(4, "REMOTE CHECK")
+    success, remote_out, _ = run_command("git remote -v")
+    if not success or not remote_out:
+        repo_name = get_user_input("GitHub repo name", cfg.get("repo_name", Path.cwd().name))
+        cfg["repo_name"] = repo_name
+        save_config(cfg)
+        # Use gh to create
+        push_choice = confirm_action("Create GitHub repo and push?")
+        if push_choice:
+            success, _, _ = run_command(f"gh repo create {repo_name} --source=. --public --push", check=False)
+            if success:
+                print_success(f"Repo {repo_name} created and pushed")
+            else:
+                print_error("Failed to create repo via gh")
+                return False
 
-    # Commit
-    print("💬 Committing...")
-    run_cmd(["git", "commit", "-m", commit_message], check=False)
+    # STEP 5: Stage & Commit
+    print_step(5, "STAGE AND COMMIT")
+    run_command("git add .")
+    commit_msg = get_user_input("Commit message", cfg.get("last_commit_msg", "update project"))
+    cfg["last_commit_msg"] = commit_msg
+    save_config(cfg)
+    run_command(f'git commit -m "{commit_msg}"', check=False)
+    print_success("Changes committed")
 
-    # Check if remote exists
-    remotes = run_cmd(["git", "remote"], capture=True).splitlines()
-    if "origin" not in remotes:
-        print(f"🌐 Creating remote repo {repo_name} on GitHub...")
-        run_cmd(["gh", "repo", "create", repo_name, "--source=.", "--public", "--push"])
+    # STEP 6: Push
+    print_step(6, "PUSH TO GITHUB")
+    run_command("git push origin main", check=False)
+    print_success("Push completed (verify on GitHub)")
 
-    # Push
-    print("🚀 Pushing to GitHub...")
-    run_cmd(["git", "push", "-u", "origin", default_branch])
-
-    # Restore working dir
-    os.chdir(os_cwd)
-
-    print("\n✅ Done! Your project is now on GitHub.")
-
+    print_success("🎉 All steps completed successfully!")
+    return True
 
 if __name__ == "__main__":
-    main()
+    try:
+        success = main()
+        sys.exit(0 if success else 1)
+    except KeyboardInterrupt:
+        print(f"\n{Colors.YELLOW}Push cancelled by user.{Colors.END}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n{Colors.RED}Unexpected error: {e}{Colors.END}")
+        sys.exit(1)
