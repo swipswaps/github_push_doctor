@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
-GitHub Push Assistant for flowCFD (Docker-ready)
-================================================
-Interactive, robust assistant to push any folder to GitHub.
-- Saves configuration to github_push_config.yaml
-- Detects dependencies: PyYAML, gh CLI, asciinema
-- Enhanced logging, error reporting, and UX
+GitHub Push Assistant with D3.js Visualization, Asciinema Recording, and Docker Wrapper
+=======================================================================================
+- Automatic dependency management (Git, Python packages, gh CLI, asciinema, Docker)
+- YAML config persistence (`github_push_config.yaml`)
+- Docker optional for isolation
+- D3.js interactive commit visualization
+- Tee-style logging
+- Human-in-the-loop interaction
 """
 
 import os
@@ -14,19 +16,11 @@ import subprocess
 import shutil
 from pathlib import Path
 
-# Optional YAML support
-try:
-    import yaml
-    YAML_AVAILABLE = True
-except ImportError:
-    YAML_AVAILABLE = False
-
 CONFIG_FILE = "github_push_config.yaml"
 LOG_FILE = "github_push_assistant.log"
+VIS_DIR = "visualization"
+FIRST_RUN_CAST = "github_push_assistant_first_run.cast"
 
-# ----------------------
-# ANSI colors for terminal
-# ----------------------
 class Colors:
     GREEN = '\033[92m'
     YELLOW = '\033[93m'
@@ -35,204 +29,236 @@ class Colors:
     BOLD = '\033[1m'
     END = '\033[0m'
 
-# ----------------------
-# Logging function (tee style)
-# ----------------------
-def log(message, level="INFO"):
-    """Log to stdout and append to LOG_FILE"""
+def log(msg, color=None):
+    prefix = color if color else ""
+    print(f"{prefix}{msg}{Colors.END if color else ''}")
     with open(LOG_FILE, "a") as f:
-        f.write(f"[{level}] {message}\n")
-    print(message)
+        f.write(msg + "\n")
 
-# ----------------------
-# System command execution
-# ----------------------
-def run_command(command, check=True, capture_output=True):
-    """Run a system command with output logging"""
-    log(f"$ {command}")
+def run_command(cmd, capture_output=True, check=True, tee=True):
+    log(f"$ {cmd}", Colors.BLUE)
     try:
         result = subprocess.run(
-            command,
+            cmd,
             shell=True,
-            text=True,
             capture_output=capture_output,
+            text=True,
             check=check
         )
-        if capture_output:
-            if result.stdout.strip():
-                log(result.stdout.strip(), "OUTPUT")
-            if result.stderr.strip():
-                log(result.stderr.strip(), "ERROR")
-        return result.returncode == 0, result.stdout.strip(), result.stderr.strip()
+        output = result.stdout.strip() if result.stdout else ""
+        error = result.stderr.strip() if result.stderr else ""
+        if tee:
+            if output:
+                log(output)
+            if error:
+                log(error, Colors.RED)
+        return True, output, error
     except subprocess.CalledProcessError as e:
-        log(f"Command failed: {e}", "ERROR")
-        if e.stdout:
-            log(e.stdout, "OUTPUT")
-        if e.stderr:
-            log(e.stderr, "ERROR")
+        if tee:
+            log(e.stdout if e.stdout else "", Colors.YELLOW)
+            log(e.stderr if e.stderr else "", Colors.RED)
         return False, e.stdout, e.stderr
 
-# ----------------------
-# User input and confirmation
-# ----------------------
-def get_user_input(prompt, default=None):
+def get_input(prompt, default=None):
     if default:
-        value = input(f"{prompt} [{default}]: ").strip()
-        return value if value else default
+        inp = input(f"{prompt} [{default}]: ").strip()
+        return inp if inp else default
     else:
         return input(f"{prompt}: ").strip()
 
-def confirm_action(message):
+def confirm(msg):
     while True:
-        resp = input(f"{message} (y/n): ").strip().lower()
-        if resp in ["y","yes"]:
+        resp = input(f"{msg} (y/n): ").strip().lower()
+        if resp in ["y", "yes"]:
             return True
-        elif resp in ["n","no"]:
+        elif resp in ["n", "no"]:
             return False
-        else:
-            log("Please enter 'y' or 'n'.")
 
-# ----------------------
-# Dependency checks
-# ----------------------
-def check_git():
-    ok, _, _ = run_command("git --version", check=False)
-    if ok:
-        log("Git is installed.", "SUCCESS")
+def check_and_install_dependencies():
+    # Git
+    success, git_ver, _ = run_command("git --version")
+    if success:
+        log(f"Git detected: {git_ver}", Colors.GREEN)
     else:
-        log("Git not found. Install git first.", "ERROR")
-    return ok
+        log("Git not found. Please install git first.", Colors.RED)
+        sys.exit(1)
 
-def check_gh():
-    ok, _, _ = run_command("gh --version", check=False)
-    if ok:
-        log("GitHub CLI detected.", "SUCCESS")
+    # gh CLI
+    success, gh_ver, _ = run_command("gh --version")
+    if success:
+        log(f"GitHub CLI detected: {gh_ver}", Colors.GREEN)
     else:
-        log("GitHub CLI not found. Install gh CLI for automated remote creation.", "WARNING")
-    return ok
+        log("GitHub CLI not found. Installing...", Colors.YELLOW)
+        run_command("sudo apt install gh -y" if shutil.which("apt") else "sudo yum install gh -y", tee=True)
 
-def check_asciinema():
-    if shutil.which("asciinema"):
-        log("Asciinema detected.", "SUCCESS")
-        return True
+    # asciinema
+    if not shutil.which("asciinema"):
+        log("Asciinema not found. Installing...", Colors.YELLOW)
+        run_command("sudo apt install asciinema -y" if shutil.which("apt") else "sudo yum install asciinema -y", tee=True)
     else:
-        log("Asciinema not found. Recording disabled.", "WARNING")
-        return False
+        log("Asciinema detected.", Colors.GREEN)
 
-def check_pyyaml():
-    if YAML_AVAILABLE:
-        log(f"PyYAML detected.", "SUCCESS")
-        return True
+    # Docker
+    if not shutil.which("docker"):
+        log("Docker not found. Installing...", Colors.YELLOW)
+        run_command("sudo apt install docker.io -y" if shutil.which("apt") else "sudo yum install docker -y", tee=True)
     else:
-        log(f"PyYAML >=6.0 not installed. YAML persistence disabled.", "WARNING")
-        return False
+        log("Docker detected.", Colors.GREEN)
 
-# ----------------------
-# Configuration management
-# ----------------------
+    # PyYAML
+    global yaml, PY_YAML
+    try:
+        import yaml
+        PY_YAML = True
+        log("PyYAML detected.", Colors.GREEN)
+    except ImportError:
+        PY_YAML = False
+        log("PyYAML not found. Installing...", Colors.YELLOW)
+        run_command(f"{sys.executable} -m pip install --upgrade PyYAML", tee=True)
+        import yaml
+        PY_YAML = True
+
 def load_config():
-    if check_pyyaml() and Path(CONFIG_FILE).exists():
-        try:
-            with open(CONFIG_FILE,"r") as f:
-                config = yaml.safe_load(f) or {}
-            log(f"Loaded config from {CONFIG_FILE}")
-            return config
-        except Exception as e:
-            log(f"Failed to load config: {e}", "ERROR")
-            return {}
-    else:
-        return {}
+    if PY_YAML and Path(CONFIG_FILE).exists():
+        with open(CONFIG_FILE, "r") as f:
+            cfg = yaml.safe_load(f) or {}
+        log(f"Loaded config from {CONFIG_FILE}", Colors.GREEN)
+        return cfg
+    return {}
 
-def save_config(config):
-    if check_pyyaml():
-        try:
-            with open(CONFIG_FILE,"w") as f:
-                yaml.safe_dump(config,f)
-            log(f"Saved config to {CONFIG_FILE}")
-        except Exception as e:
-            log(f"Failed to save config: {e}", "ERROR")
+def save_config(cfg):
+    if PY_YAML:
+        with open(CONFIG_FILE, "w") as f:
+            yaml.safe_dump(cfg, f)
+        log(f"Saved config to {CONFIG_FILE}", Colors.GREEN)
 
-# ----------------------
-# Main workflow
-# ----------------------
+def docker_prompt_and_build(cfg, project_path):
+    if confirm("Do you want to run this inside Docker for full isolation?"):
+        docker_tag = cfg.get("docker_tag", "github_push_assistant")
+        log(f"Building Docker image '{docker_tag}'...", Colors.YELLOW)
+        dockerfile = Path(project_path) / "Dockerfile"
+        if not dockerfile.exists():
+            dockerfile.write_text("""
+FROM python:3.12-slim
+WORKDIR /workspace
+RUN pip install --upgrade pip
+RUN pip install PyYAML gh asciinema
+COPY . /workspace
+ENTRYPOINT ["python3", "github_push_assistant.py"]
+""")
+        run_command(f"docker build -t {docker_tag} {project_path}")
+        log(f"Docker image '{docker_tag}' ready. Run with:\n"
+            f"docker run -it -v {project_path}:/workspace {docker_tag}", Colors.GREEN)
+        cfg["docker_tag"] = docker_tag
+        save_config(cfg)
+
+def generate_d3_html(project_path):
+    vis_path = Path(project_path) / VIS_DIR
+    vis_path.mkdir(exist_ok=True)
+    html_file = vis_path / "commits.html"
+    cmd = "git log --pretty=format:'{\"hash\":\"%h\",\"author\":\"%an\",\"date\":\"%ad\",\"message\":\"%s\"},' | sed '$ s/,$//'"
+    success, log_json, _ = run_command(cmd)
+    commits_json = f"[{log_json}]" if success else "[]"
+    html_file.write_text(f"""
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>Git Commit Visualization</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<body>
+<h2>Commit History</h2>
+<svg width="1000" height="600"></svg>
+<script>
+const commits = {commits_json};
+const svg = d3.select("svg");
+const margin = {{top: 20, right: 20, bottom: 30, left: 50}};
+const width = +svg.attr("width") - margin.left - margin.right;
+const height = +svg.attr("height") - margin.top - margin.bottom;
+const g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+const x = d3.scalePoint().domain(d3.range(commits.length)).range([0, width]);
+const y = d3.scaleLinear().domain([0, commits.length]).range([height, 0]);
+g.selectAll("circle")
+    .data(commits)
+    .enter().append("circle")
+    .attr("cx", (d,i) => x(i))
+    .attr("cy", (d,i) => y(i))
+    .attr("r", 6)
+    .attr("fill", "steelblue")
+    .append("title")
+    .text(d => d.message + " by " + d.author + " on " + d.date);
+</script>
+</body>
+""")
+    log(f"D3.js commit visualization generated at {html_file}", Colors.GREEN)
+
+def asciinema_first_run():
+    if confirm("Do you want to record this run with asciinema?"):
+        run_command(f"asciinema rec -y {FIRST_RUN_CAST} --command 'python3 github_push_assistant.py'")
+
 def main():
-    log(f"{Colors.BOLD}{Colors.GREEN}🔧 GitHub Push Assistant{Colors.END}")
+    if Path(LOG_FILE).exists():
+        Path(LOG_FILE).unlink()
+    log("🔧 GitHub Push Assistant with D3.js & Asciinema", Colors.BOLD)
 
-    # Load previous configuration
-    config = load_config()
-    
-    # Step 1: Select project folder
-    default_path = config.get("project_path", str(Path.cwd()))
-    project_path = get_user_input("Project path", default_path)
-    project_path = str(Path(project_path).resolve())
-    log(f"Working in: {project_path}")
-    config["project_path"] = project_path
-    
+    check_and_install_dependencies()
+
+    cfg = load_config()
+    default_path = cfg.get("project_path", str(Path.cwd()))
+    project_path = get_input("Project path", default_path)
+    cfg["project_path"] = project_path
+    save_config(cfg)
+    log(f"Working in: {project_path}", Colors.GREEN)
+
+    docker_prompt_and_build(cfg, project_path)
+
     os.chdir(project_path)
-
-    # Step 2: Check git, gh, asciinema
-    if not check_git():
-        return False
-    gh_installed = check_gh()
-    asciinema_installed = check_asciinema()
-    
-    # Step 3: GitHub authentication
-    if gh_installed:
-        ok, _, _ = run_command("gh auth status", check=False)
-        if not ok:
-            if confirm_action("gh CLI not authenticated. Run 'gh auth login'?"):
-                run_command("gh auth login")
-    
-    # Step 4: Determine repo name
-    default_repo = config.get("repo_name", Path(project_path).name)
-    repo_name = get_user_input("GitHub repo name", default_repo)
-    config["repo_name"] = repo_name
-
-    # Step 5: Default branch
-    default_branch = config.get("default_branch","main")
-    branch_name = get_user_input("Default branch", default_branch)
-    config["default_branch"] = branch_name
-
-    # Step 6: Commit message
-    default_commit = config.get("commit_message","update project")
-    commit_msg = get_user_input("Commit message", default_commit)
-    config["commit_message"] = commit_msg
-
-    # Save current config
-    save_config(config)
-
-    # Step 7: Initialize repo if needed
-    if not (Path(".git").exists()):
-        log("⚙️ Initializing new git repo...")
+    if not (Path(project_path) / ".git").exists():
+        log("Initializing new git repo...", Colors.YELLOW)
         run_command("git init")
-        run_command(f"git branch -M {branch_name}")
+        run_command("git branch -M main")
+    else:
+        log("Git repo exists.", Colors.GREEN)
 
-    # Step 8: Stage all files
-    log("➕ Staging all files...")
+    success, gh_status, _ = run_command("gh auth status")
+    if "Logged in" not in gh_status:
+        log("GitHub CLI not authenticated.", Colors.RED)
+        if confirm("Run 'gh auth login' now?"):
+            run_command("gh auth login", tee=True)
+        else:
+            log("Authentication required to push. Exiting.", Colors.RED)
+            sys.exit(1)
+
+    default_repo = cfg.get("github_repo_name", Path(project_path).name)
+    repo_name = get_input("GitHub repo name", default_repo)
+    cfg["github_repo_name"] = repo_name
+    save_config(cfg)
+    success, _, _ = run_command(f"gh repo create {repo_name} --source=. --public --push")
+    if not success:
+        log(f"Remote repo may already exist.", Colors.RED)
+
+    log("➕ Staging all files...", Colors.YELLOW)
     run_command("git add .")
+    default_msg = cfg.get("commit_message", "Initial commit via github_push_assistant")
+    commit_msg = get_input("Commit message", default_msg)
+    cfg["commit_message"] = commit_msg
+    save_config(cfg)
+    run_command(f'git commit -m "{commit_msg}"')
+    log("🌐 Pushing changes...", Colors.YELLOW)
+    run_command("git push origin main", tee=True)
 
-    # Step 9: Commit changes
-    log("💬 Committing...")
-    run_command(f'git commit -m "{commit_msg}"', check=False)
+    # Generate D3.js visualization
+    generate_d3_html(project_path)
 
-    # Step 10: Create GitHub repo if gh CLI present
-    if gh_installed:
-        log(f"🌐 Creating GitHub repo {repo_name}...")
-        run_command(f"gh repo create {repo_name} --source=. --public --push", check=False)
+    # Optionally record with asciinema
+    asciinema_first_run()
 
-    log(f"{Colors.GREEN}✅ Push workflow complete. Review logs and GitHub repo.{Colors.END}")
-    return True
+    log("✅ Workflow complete with D3.js visualization.", Colors.GREEN)
 
-# ----------------------
-# Entry point
-# ----------------------
 if __name__ == "__main__":
     try:
-        success = main()
-        sys.exit(0 if success else 1)
+        main()
     except KeyboardInterrupt:
-        log("User cancelled.", "WARNING")
+        log("Push cancelled by user.", Colors.YELLOW)
         sys.exit(1)
     except Exception as e:
-        log(f"Unexpected error: {e}", "ERROR")
+        log(f"Unexpected error: {e}", Colors.RED)
         sys.exit(1)

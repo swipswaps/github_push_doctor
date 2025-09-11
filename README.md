@@ -1,23 +1,18 @@
-# GitHub Push Assistant (Docker-ready)
+# GitHub Push Assistant for flowCFD (Automated + D3.js Visualization)
 
-Automated assistant to push any folder/project to GitHub.
-Supports configuration persistence, interactive prompts, and logging.
+## Overview
+Automates pushing your project to GitHub and visualizes commit history using D3.js.  
+Handles all dependencies, Docker (optional), git initialization, commits, pushes, logging, and first-run recording.
 
----
-
-## Features
-
-- Detects git, gh CLI, PyYAML, asciinema
-- Saves interactive settings to `github_push_config.yaml`
-- Logs all commands and outputs to `github_push_assistant.log`
-- Fully Dockerized for reproducible environments
+No manual Docker or Git commands are required.
 
 ---
 
-## Setup
+## Quickstart
 
-1. Clone or copy project folder.
-2. Ensure Docker installed (optional, recommended).
-3. Python dependencies:
-   ```bash
-   pip install -r requirements.txt
+### First Run
+1. Clone or download project folder.
+2. Open terminal in project root.
+3. Run:
+```bash
+python3 github_push_assistant.py

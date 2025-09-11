@@ -1,23 +1,40 @@
-[INFO] [1m[92m🔧 GitHub Push Assistant[0m
-[SUCCESS] PyYAML detected.
-[INFO] Loaded config from github_push_config.yaml
-[INFO] Working in: /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940
-[INFO] $ git --version
-[OUTPUT] git version 2.51.0
-[SUCCESS] Git is installed.
-[INFO] $ gh --version
-[OUTPUT] gh version 2.76.1 (2025-07-29)
+🔧 GitHub Push Assistant with D3.js & Asciinema
+$ git --version
+git version 2.51.0
+Git detected: git version 2.51.0
+$ gh --version
+gh version 2.76.1 (2025-07-29)
 https://github.com/cli/cli/releases/tag/v2.76.1
-[SUCCESS] GitHub CLI detected.
-[SUCCESS] Asciinema detected.
-[INFO] $ gh auth status
-[OUTPUT] github.com
+GitHub CLI detected: gh version 2.76.1 (2025-07-29)
+https://github.com/cli/cli/releases/tag/v2.76.1
+Asciinema detected.
+Docker detected.
+PyYAML detected.
+Loaded config from github_push_config.yaml
+Saved config to github_push_config.yaml
+Working in: /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940
+Building Docker image 'github_push_assistant'...
+$ docker build -t github_push_assistant /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940
+
+ERROR: Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?
+
+Docker image 'github_push_assistant' ready. Run with:
+docker run -it -v /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940:/workspace github_push_assistant
+Saved config to github_push_config.yaml
+Git repo exists.
+$ gh auth status
+github.com
   ✓ Logged in to github.com account swipswaps (keyring)
   - Active account: true
   - Git operations protocol: https
   - Token: gho_************************************
   - Token scopes: 'gist', 'read:org', 'repo', 'workflow'
-[SUCCESS] PyYAML detected.
-[INFO] Saved config to github_push_config.yaml
-[INFO] ➕ Staging all files...
-[INFO] $ git add .
+Saved config to github_push_config.yaml
+$ gh repo create github_flow_cfd --source=. --public --push
+https://github.com/swipswaps/github_flow_cfd
+
+X Unable to add remote "origin"
+
+Remote repo may already exist.
+➕ Staging all files...
+$ git add .
