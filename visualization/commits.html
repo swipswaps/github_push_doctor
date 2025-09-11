@@ -1,32 +1,42 @@
 
-<!DOCTYPE html>
-<meta charset="utf-8">
-<title>Git Commit Visualization</title>
-<script src="https://d3js.org/d3.v7.min.js"></script>
-<body>
-<h2>Commit History</h2>
-<svg width="1000" height="600"></svg>
-<script>
-const commits = [{"hash":"ee53848","author":"swipswaps","date":"Thu Sep 11 12:07:59 2025 -0400","message":"script logs all output to github_push_assistant.log with colors for human-readable transparency"},
-{"hash":"f91db4c","author":"swipswaps","date":"Thu Sep 11 12:07:11 2025 -0400","message":"interactive prompts handle configuration, Docker, commit, and push"},
-{"hash":"99bb2c7","author":"swipswaps","date":"Wed Sep 10 11:54:48 2025 -0400","message":"Docker integrat"},
-{"hash":"8b821d9","author":"swipswaps","date":"Wed Sep 10 11:32:03 2025 -0400","message":"updated .py to detect gh auth status prior to push"},
-{"hash":"781bda6","author":"swipswaps","date":"Wed Sep 10 11:06:06 2025 -0400","message":"cursor generated.bak, chatGPT upgraded"}];
-const svg = d3.select("svg");
-const margin = {top: 20, right: 20, bottom: 30, left: 50};
-const width = +svg.attr("width") - margin.left - margin.right;
-const height = +svg.attr("height") - margin.top - margin.bottom;
-const g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
-const x = d3.scalePoint().domain(d3.range(commits.length)).range([0, width]);
-const y = d3.scaleLinear().domain([0, commits.length]).range([height, 0]);
-g.selectAll("circle")
-    .data(commits)
-    .enter().append("circle")
-    .attr("cx", (d,i) => x(i))
-    .attr("cy", (d,i) => y(i))
-    .attr("r", 6)
-    .attr("fill", "steelblue")
-    .append("title")
-    .text(d => d.message + " by " + d.author + " on " + d.date);
-</script>
-</body>
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Commit History Visualization</title>
+      <script src="https://d3js.org/d3.v7.min.js"></script>
+    </head>
+    <body>
+      <h1>Commit History Visualization</h1>
+      <svg id="chart" width="1000" height="400"></svg>
+      <script>
+        d3.json("commits.json").then(data => {
+            const svg = d3.select("#chart");
+            const parseDate = d3.isoParse;
+            const xScale = d3.scaleTime()
+                             .domain(d3.extent(data, d => parseDate(d.date)))
+                             .range([50, 950]);
+            const yScale = d3.scaleLinear().domain([0, data.length]).range([350, 50]);
+
+            svg.selectAll("circle")
+                .data(data)
+                .enter()
+                .append("circle")
+                .attr("cx", d => xScale(parseDate(d.date)))
+                .attr("cy", (d,i) => yScale(i))
+                .attr("r", 8)
+                .style("fill", "steelblue");
+
+            svg.selectAll("text")
+                .data(data)
+                .enter()
+                .append("text")
+                .attr("x", d => xScale(parseDate(d.date)))
+                .attr("y", (d,i) => yScale(i)-12)
+                .attr("text-anchor", "middle")
+                .text(d => d.message);
+        });
+      </script>
+    </body>
+    </html>
+    

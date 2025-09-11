@@ -157,3 +157,218 @@ https://github.com/cli/cli/releases/tag/v2.76.1
 2025-09-11 13:44:47.100088 $ gh repo create github_push_doctor --source=. --public --push
 2025-09-11 13:44:47.548633 GraphQL: Name already exists on this account (createRepository)
 2025-09-11 13:44:47.548797 $ git add .
+2025-09-11 13:45:55.676905 $ git commit -m "fixed repo name change errors"
+2025-09-11 13:45:55.689929 [main f092354] fixed repo name change errors
+ 5 files changed, 160 insertions(+), 21 deletions(-)
+2025-09-11 13:45:55.690016 $ git push origin main
+2025-09-11 13:45:56.550085 To https://github.com/swipswaps/github_push_assistant.git
+   bf503e8..f092354  main -> main
+2025-09-11 13:45:56.550211 $ git log --pretty=format:"%H|%an|%ad|%s" --date=iso
+2025-09-11 13:45:56.556538 f09235448b1071e3f076be4cda6d5cfc3ab23f41|swipswaps|2025-09-11 13:45:55 -0400|fixed repo name change errors
+bf503e85e0abd18fe276f3a24373eabc46f5dd2e|swipswaps|2025-09-11 13:29:37 -0400|fixed, linted, commented github_push_assistant with Docker, asciinema
+ee53848bf8c769f701542b54cbfe17c27219d732|swipswaps|2025-09-11 12:07:59 -0400|script logs all output to github_push_assistant.log with colors for human-readable transparency
+f91db4c3dc1d356468a49de1c9e1d0a6706bb809|swipswaps|2025-09-11 12:07:11 -0400|interactive prompts handle configuration, Docker, commit, and push
+99bb2c7c040ce1378d7e292f7535aa75106ac263|swipswaps|2025-09-10 11:54:48 -0400|Docker integrat
+8b821d9632c1138635dcc3e47fe74867e0db295f|swipswaps|2025-09-10 11:32:03 -0400|updated .py to detect gh auth status prior to push
+781bda62ae804529cde70d9a473ec0726ecbb800|swipswaps|2025-09-10 11:06:06 -0400|cursor generated.bak, chatGPT upgraded
+2025-09-11 13:45:56.559683 D3.js commit visualization generated at visualization/commits.html
+2025-09-11 13:45:56.559779 ✅ Workflow complete with upgraded D3.js visualization.
+2025-09-11 14:08:29.794920 🔧 GitHub Push Assistant with D3.js & Asciinema (Upgraded)
+2025-09-11 14:08:29.806988 $ git --version
+2025-09-11 14:08:29.809867 git version 2.51.0
+2025-09-11 14:08:29.809965 git detected: git version 2.51.0
+2025-09-11 14:08:29.810128 $ gh --version
+2025-09-11 14:08:30.066782 gh version 2.76.1 (2025-07-29)
+https://github.com/cli/cli/releases/tag/v2.76.1
+2025-09-11 14:08:30.066894 gh detected: gh version 2.76.1 (2025-07-29)
+https://github.com/cli/cli/releases/tag/v2.76.1
+2025-09-11 14:08:30.067065 $ asciinema --version
+2025-09-11 14:08:30.206874 asciinema 2.4.0
+2025-09-11 14:08:30.207001 asciinema detected: asciinema 2.4.0
+2025-09-11 14:08:30.207183 $ docker --version
+2025-09-11 14:08:30.231453 Docker version 28.3.3, build 980b856
+2025-09-11 14:08:30.231535 docker detected: Docker version 28.3.3, build 980b856
+2025-09-11 14:08:33.877133 Working in: /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940
+2025-09-11 14:08:33.877242 $ docker build -t github_push_assistant /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940
+2025-09-11 14:08:33.983077 ERROR: Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?
+2025-09-11 14:08:33.983163 🐳 Docker image built. It will run automatically...
+2025-09-11 14:08:33.983225 🎥 Recording first run automatically: github_push_assistant_first_run.cast
+2025-09-11 14:08:34.123571 ✅ Asciinema recording complete: github_push_assistant_first_run.cast
+2025-09-11 14:19:13.843848 🔧 GitHub Push Assistant with D3.js & Asciinema (Upgraded)
+2025-09-11 14:19:13.876611 $ git --version
+2025-09-11 14:19:13.879810 git version 2.51.0
+2025-09-11 14:19:13.879903 git detected: git version 2.51.0
+2025-09-11 14:19:13.880125 $ gh --version
+2025-09-11 14:19:13.943811 gh version 2.76.1 (2025-07-29)
+https://github.com/cli/cli/releases/tag/v2.76.1
+2025-09-11 14:19:13.943950 gh detected: gh version 2.76.1 (2025-07-29)
+https://github.com/cli/cli/releases/tag/v2.76.1
+2025-09-11 14:19:13.944170 $ asciinema --version
+2025-09-11 14:19:14.073273 asciinema 2.4.0
+2025-09-11 14:19:14.073358 asciinema detected: asciinema 2.4.0
+2025-09-11 14:19:14.073520 $ docker --version
+2025-09-11 14:19:14.095374 Docker version 28.3.3, build 980b856
+2025-09-11 14:19:14.095586 docker detected: Docker version 28.3.3, build 980b856
+2025-09-11 14:19:15.485128 Working in: /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940
+2025-09-11 14:19:15.485217 $ docker build -t github_push_assistant /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940
+2025-09-11 14:19:15.592627 ERROR: Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?
+2025-09-11 14:19:15.592723 🐳 Docker image built. It will run automatically...
+2025-09-11 14:19:15.592782 🎥 Recording first run automatically: github_push_assistant_first_run.cast
+2025-09-11 14:19:15.874724 🔧 GitHub Push Assistant with D3.js & Asciinema (Upgraded)
+2025-09-11 14:19:15.876528 $ git --version
+2025-09-11 14:19:15.879839 git version 2.51.0
+2025-09-11 14:19:15.879912 git detected: git version 2.51.0
+2025-09-11 14:19:15.880046 $ gh --version
+2025-09-11 14:19:15.955772 gh version 2.76.1 (2025-07-29)
+https://github.com/cli/cli/releases/tag/v2.76.1
+2025-09-11 14:19:15.955869 gh detected: gh version 2.76.1 (2025-07-29)
+https://github.com/cli/cli/releases/tag/v2.76.1
+2025-09-11 14:19:15.956033 $ asciinema --version
+2025-09-11 14:19:16.105636 asciinema 2.4.0
+2025-09-11 14:19:16.105713 asciinema detected: asciinema 2.4.0
+2025-09-11 14:19:16.105842 $ docker --version
+2025-09-11 14:19:16.122518 Docker version 28.3.3, build 980b856
+2025-09-11 14:19:16.122597 docker detected: Docker version 28.3.3, build 980b856
+🔧 GitHub Push Assistant with D3.js & Asciinema (Upgraded)
+$ git --version
+git version 2.51.0
+git detected: git version 2.51.0
+$ gh --version
+gh version 2.76.1 (2025-07-29)
+https://github.com/cli/cli/releases/tag/v2.76.1
+gh detected: gh version 2.76.1 (2025-07-29)
+https://github.com/cli/cli/releases/tag/v2.76.1
+$ asciinema --version
+asciinema 2.4.0
+asciinema detected: asciinema 2.4.0
+$ docker --version
+Docker version 28.3.3, build 980b856
+docker detected: Docker version 28.3.3, build 980b856
+Project path [/home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940]: 2025-09-11 14:19:25.237143 Working in: /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940
+2025-09-11 14:19:25.237214 $ docker build -t github_push_assistant /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940
+2025-09-11 14:19:25.341171 ERROR: Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?
+2025-09-11 14:19:25.341251 🐳 Docker image built. It will run automatically...
+2025-09-11 14:19:25.341298 🎥 Recording first run automatically: github_push_assistant_first_run.cast
+asciinema: recording asciicast to github_push_assistant_first_run.cast
+asciinema: exit opened program when you're done
+2025-09-11 14:19:25.542423 🔧 GitHub Push Assistant with D3.js & Asciinema (Upgraded)
+2025-09-11 14:19:25.544090 $ git --version
+2025-09-11 14:19:25.547000 git version 2.51.0
+2025-09-11 14:19:25.547069 git detected: git version 2.51.0
+2025-09-11 14:19:25.547198 $ gh --version
+2025-09-11 14:19:25.607564 gh version 2.76.1 (2025-07-29)
+https://github.com/cli/cli/releases/tag/v2.76.1
+2025-09-11 14:19:25.607654 gh detected: gh version 2.76.1 (2025-07-29)
+https://github.com/cli/cli/releases/tag/v2.76.1
+2025-09-11 14:19:25.607809 $ asciinema --version
+2025-09-11 14:19:25.734244 asciinema 2.4.0
+2025-09-11 14:19:25.734337 asciinema detected: asciinema 2.4.0
+2025-09-11 14:19:25.734518 $ docker --version
+2025-09-11 14:19:25.752003 Docker version 28.3.3, build 980b856
+2025-09-11 14:19:25.752086 docker detected: Docker version 28.3.3, build 980b856
+🔧 GitHub Push Assistant with D3.js & Asciinema (Upgraded)
+$ git --version
+git version 2.51.0
+git detected: git version 2.51.0
+$ gh --version
+gh version 2.76.1 (2025-07-29)
+https://github.com/cli/cli/releases/tag/v2.76.1
+gh detected: gh version 2.76.1 (2025-07-29)
+https://github.com/cli/cli/releases/tag/v2.76.1
+$ asciinema --version
+asciinema 2.4.0
+asciinema detected: asciinema 2.4.0
+$ docker --version
+Docker version 28.3.3, build 980b856
+docker detected: Docker version 28.3.3, build 980b856
+Project path [/home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940]: 2025-09-11 14:19:30.893210 Working in: /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940
+2025-09-11 14:19:30.893322 $ docker build -t github_push_assistant /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940
+2025-09-11 14:19:30.996271 ERROR: Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?
+2025-09-11 14:19:30.996349 🐳 Docker image built. It will run automatically...
+2025-09-11 14:19:30.996394 🎥 Recording first run automatically: github_push_assistant_first_run.cast
+asciinema: recording asciicast to github_push_assistant_first_run.cast
+asciinema: exit opened program when you're done
+2025-09-11 14:19:31.179786 🔧 GitHub Push Assistant with D3.js & Asciinema (Upgraded)
+2025-09-11 14:19:31.181470 $ git --version
+2025-09-11 14:19:31.184243 git version 2.51.0
+2025-09-11 14:19:31.184313 git detected: git version 2.51.0
+2025-09-11 14:19:31.184454 $ gh --version
+2025-09-11 14:19:31.244307 gh version 2.76.1 (2025-07-29)
+https://github.com/cli/cli/releases/tag/v2.76.1
+2025-09-11 14:19:31.244396 gh detected: gh version 2.76.1 (2025-07-29)
+https://github.com/cli/cli/releases/tag/v2.76.1
+2025-09-11 14:19:31.244555 $ asciinema --version
+2025-09-11 14:19:31.370006 asciinema 2.4.0
+2025-09-11 14:19:31.370083 asciinema detected: asciinema 2.4.0
+2025-09-11 14:19:31.370216 $ docker --version
+2025-09-11 14:19:31.387267 Docker version 28.3.3, build 980b856
+2025-09-11 14:19:31.387352 docker detected: Docker version 28.3.3, build 980b856
+🔧 GitHub Push Assistant with D3.js & Asciinema (Upgraded)
+$ git --version
+git version 2.51.0
+git detected: git version 2.51.0
+$ gh --version
+gh version 2.76.1 (2025-07-29)
+https://github.com/cli/cli/releases/tag/v2.76.1
+gh detected: gh version 2.76.1 (2025-07-29)
+https://github.com/cli/cli/releases/tag/v2.76.1
+$ asciinema --version
+asciinema 2.4.0
+asciinema detected: asciinema 2.4.0
+$ docker --version
+Docker version 28.3.3, build 980b856
+docker detected: Docker version 28.3.3, build 980b856
+Project path [/home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940]: asciinema: recording finished
+asciinema: asciicast saved to github_push_assistant_first_run.cast
+2025-09-11 14:28:08.345281 ✅ Asciinema recording complete: github_push_assistant_first_run.cast
+Working in: /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940
+$ docker build -t github_push_assistant /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940
+ERROR: Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?
+🐳 Docker image built. It will run automatically...
+🎥 Recording first run automatically: github_push_assistant_first_run.cast
+✅ Asciinema recording complete: github_push_assistant_first_run.cast
+asciinema: recording finished
+asciinema: asciicast saved to github_push_assistant_first_run.cast
+2025-09-11 14:28:08.409291 ✅ Asciinema recording complete: github_push_assistant_first_run.cast
+Working in: /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940
+$ docker build -t github_push_assistant /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940
+ERROR: Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?
+🐳 Docker image built. It will run automatically...
+🎥 Recording first run automatically: github_push_assistant_first_run.cast
+✅ Asciinema recording complete: github_push_assistant_first_run.cast
+2025-09-11 14:28:08.462886 ✅ Asciinema recording complete: github_push_assistant_first_run.cast
+2025-09-11 14:28:27.688289 🔧 GitHub Push Assistant with D3.js & Asciinema (Upgraded)
+2025-09-11 14:28:27.690782 $ git --version
+2025-09-11 14:28:27.725353 git version 2.51.0
+2025-09-11 14:28:27.725455 git detected: git version 2.51.0
+2025-09-11 14:28:27.725612 $ gh --version
+2025-09-11 14:28:28.592156 gh version 2.76.1 (2025-07-29)
+https://github.com/cli/cli/releases/tag/v2.76.1
+2025-09-11 14:28:28.592286 gh detected: gh version 2.76.1 (2025-07-29)
+https://github.com/cli/cli/releases/tag/v2.76.1
+2025-09-11 14:28:28.592523 $ asciinema --version
+2025-09-11 14:28:28.838631 asciinema 2.4.0
+2025-09-11 14:28:28.838767 asciinema detected: asciinema 2.4.0
+2025-09-11 14:28:28.838989 $ docker --version
+2025-09-11 14:28:29.349701 Docker version 28.3.3, build 980b856
+2025-09-11 14:28:29.349813 docker detected: Docker version 28.3.3, build 980b856
+2025-09-11 14:28:30.247604 Working in: /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940
+2025-09-11 14:28:30.247815 ℹ️ First run cast already exists: github_push_assistant_first_run.cast, skipping recording
+2025-09-11 14:28:30.247914 $ docker build -t github_push_assistant /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940
+2025-09-11 14:28:30.659488 ERROR: Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?
+2025-09-11 14:28:30.659580 🐳 Docker image built. Run with:
+2025-09-11 14:28:30.659636 docker run -it -v /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940:/workspace github_push_assistant
+2025-09-11 14:28:59.598962 $ git init
+2025-09-11 14:28:59.637359 Reinitialized existing Git repository in /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940/.git/
+2025-09-11 14:28:59.637451 $ gh auth status
+2025-09-11 14:29:00.320945 github.com
+  ✓ Logged in to github.com account swipswaps (keyring)
+  - Active account: true
+  - Git operations protocol: https
+  - Token: gho_************************************
+  - Token scopes: 'gist', 'read:org', 'repo', 'workflow'
+2025-09-11 14:29:00.321071 $ git remote
+2025-09-11 14:29:00.370277 origin
+2025-09-11 14:29:00.370376 ✅ Remote 'origin' exists, updating URL...
+2025-09-11 14:29:00.370456 $ gh repo view github_push_doctor --json url -q .url | xargs git remote set-url origin
+2025-09-11 14:29:01.240389 $ git add .
