@@ -1,8 +1,10 @@
 # GitHub Push Assistant Dockerfile
 FROM python:3.11-slim
 
-# Install deps
-RUN apt-get update && apt-get install -y git gh docker.io asciinema && rm -rf /var/lib/apt/lists/*
+# Install dependencies
+RUN apt-get update && \
+    apt-get install -y git gh docker.io asciinema && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
 

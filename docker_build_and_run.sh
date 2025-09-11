@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Wrapper to build and run the GitHub Push Assistant inside Docker
-# Ensures consistent environment
+# Wrapper to build & run the assistant inside Docker
+# Handles consistent environment, volume mapping, logging
 
 set -euo pipefail
 LOGFILE="docker_build_and_run.log"

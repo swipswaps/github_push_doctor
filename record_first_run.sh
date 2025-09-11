@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Record the first run of GitHub Push Assistant with asciinema + tee logging
+# Record first run of GitHub Push Assistant with asciinema + tee logging
+# Auto-captures session for auditing or demo
 
 set -euo pipefail
 LOGFILE="github_push_assistant_first_run.log"
