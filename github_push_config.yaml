@@ -1,7 +1,8 @@
-commit_message: interactive prompts handle configuration, Docker, commit, and push
+commit_message: script logs all output to github_push_assistant.log with colors for
+  human-readable transparency
 default_branch: main
 docker_tag: github_push_assistant
 github_repo_name: github_flow_cfd
 last_commit_msg: updated .py to detect gh auth status prior to push
 project_path: /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940
-repo_name: github_push_assistant
+repo_name: github_push_doctor
