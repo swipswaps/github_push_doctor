@@ -1,0 +1,31 @@
+
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>Git Commit Visualization</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<body>
+<h2>Commit History</h2>
+<svg width="1000" height="600"></svg>
+<script>
+const commits = [{"hash":"f91db4c","author":"swipswaps","date":"Thu Sep 11 12:07:11 2025 -0400","message":"interactive prompts handle configuration, Docker, commit, and push"},
+{"hash":"99bb2c7","author":"swipswaps","date":"Wed Sep 10 11:54:48 2025 -0400","message":"Docker integrat"},
+{"hash":"8b821d9","author":"swipswaps","date":"Wed Sep 10 11:32:03 2025 -0400","message":"updated .py to detect gh auth status prior to push"},
+{"hash":"781bda6","author":"swipswaps","date":"Wed Sep 10 11:06:06 2025 -0400","message":"cursor generated.bak, chatGPT upgraded"}];
+const svg = d3.select("svg");
+const margin = {top: 20, right: 20, bottom: 30, left: 50};
+const width = +svg.attr("width") - margin.left - margin.right;
+const height = +svg.attr("height") - margin.top - margin.bottom;
+const g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+const x = d3.scalePoint().domain(d3.range(commits.length)).range([0, width]);
+const y = d3.scaleLinear().domain([0, commits.length]).range([height, 0]);
+g.selectAll("circle")
+    .data(commits)
+    .enter().append("circle")
+    .attr("cx", (d,i) => x(i))
+    .attr("cy", (d,i) => y(i))
+    .attr("r", 6)
+    .attr("fill", "steelblue")
+    .append("title")
+    .text(d => d.message + " by " + d.author + " on " + d.date);
+</script>
+</body>

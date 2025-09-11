@@ -1,4 +1,4 @@
-commit_message: Docker integrat
+commit_message: interactive prompts handle configuration, Docker, commit, and push
 default_branch: main
 docker_tag: github_push_assistant
 github_repo_name: github_flow_cfd

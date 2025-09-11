@@ -31,9 +31,8 @@ github.com
   - Token scopes: 'gist', 'read:org', 'repo', 'workflow'
 Saved config to github_push_config.yaml
 $ gh repo create github_flow_cfd --source=. --public --push
-https://github.com/swipswaps/github_flow_cfd
 
-X Unable to add remote "origin"
+GraphQL: Name already exists on this account (createRepository)
 
 Remote repo may already exist.
 ➕ Staging all files...
