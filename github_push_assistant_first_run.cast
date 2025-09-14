@@ -1,3 +1,2 @@
-{"version": 2, "width": 80, "height": 24, "timestamp": 1757614771, "env": {"SHELL": "/bin/bash", "TERM": "xterm-256color"}}
-[0.273182, "o", "🔧 GitHub Push Assistant with D3.js & Asciinema (Upgraded)\r\n$ git --version\r\ngit version 2.51.0\r\ngit detected: git version 2.51.0\r\n$ gh --version\r\ngh version 2.76.1 (2025-07-29)\r\nhttps://github.com/cli/cli/releases/tag/v2.76.1\r\ngh detected: gh version 2.76.1 (2025-07-29)\r\nhttps://github.com/cli/cli/releases/tag/v2.76.1\r\n$ asciinema --version\r\nasciinema 2.4.0\r\nasciinema detected: asciinema 2.4.0\r\n$ docker --version\r\nDocker version 28.3.3, build 980b856\r\ndocker detected: Docker version 28.3.3, build 980b856\r\nProject path [/home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940]: "]
-[517.092871, "o", "^C"]
+{"version": 2, "width": 80, "height": 24, "timestamp": 1757862930, "env": {"SHELL": "/bin/bash", "TERM": "xterm-256color"}}
+[0.003415, "o", "Session recorded\r\n"]

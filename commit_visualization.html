@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>D3.js Commit Visualization</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+<h1>Commit History Visualization</h1>
+<svg id="chart" width="1000" height="400"></svg>
+<script>
+const commits = [{'id': '6caf896', 'message': 'fix recursive self initialization', 'x': 100, 'y': 200}, {'id': 'f092354', 'message': 'fixed repo name change errors', 'x': 180, 'y': 200}, {'id': 'bf503e8', 'message': 'fixed, linted, commented github_push_assistant with Docker, asciinema', 'x': 260, 'y': 200}, {'id': 'ee53848', 'message': 'script logs all output to github_push_assistant.log with colors for human-readable transparency', 'x': 340, 'y': 200}, {'id': 'f91db4c', 'message': 'interactive prompts handle configuration, Docker, commit, and push', 'x': 420, 'y': 200}, {'id': '99bb2c7', 'message': 'Docker integrat', 'x': 500, 'y': 200}, {'id': '8b821d9', 'message': 'updated .py to detect gh auth status prior to push', 'x': 580, 'y': 200}, {'id': '781bda6', 'message': 'cursor generated.bak, chatGPT upgraded', 'x': 660, 'y': 200}];
+
+const svg = d3.select("#chart");
+
+svg.selectAll("circle")
+   .data(commits)
+   .enter()
+   .append("circle")
+   .attr("cx", d => d.x)
+   .attr("cy", d => d.y)
+   .attr("r", 20)
+   .style("fill", "steelblue");
+
+svg.selectAll("text")
+   .data(commits)
+   .enter()
+   .append("text")
+   .attr("x", d => d.x)
+   .attr("y", d => d.y + 40)
+   .attr("text-anchor", "middle")
+   .text(d => d.message);
+</script>
+</body>
+</html>

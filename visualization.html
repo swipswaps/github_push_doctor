@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>D3.js Commit Visualization</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  body { font-family: sans-serif; background: #fafafa; }
+  circle { stroke: #333; stroke-width: 1px; }
+  .label { font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>Commit History Visualization</h1>
+<svg id="chart" width="1000" height="400"></svg>
+<script>
+d3.json("commits.json").then(commits => {
+  const svg = d3.select("#chart");
+  svg.selectAll("circle")
+     .data(commits)
+     .enter()
+     .append("circle")
+     .attr("cx", d => d.x)
+     .attr("cy", d => d.y)
+     .attr("r", 20)
+     .style("fill", "steelblue");
+
+  svg.selectAll("text")
+     .data(commits)
+     .enter()
+     .append("text")
+     .attr("x", d => d.x)
+     .attr("y", d => d.y + 40)
+     .attr("class", "label")
+     .attr("text-anchor", "middle")
+     .text(d => d.message);
+});
+</script>
+</body>
+</html>

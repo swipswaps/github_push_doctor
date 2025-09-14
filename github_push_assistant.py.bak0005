@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+"""
+GitHub Push Assistant (Docker optional, repo-aware, PRF-compliant)
+- Handles cloned repos vs. new repos correctly
+- Records first run with asciinema unless skipped
+- Optionally runs inside Docker (prompt, defaults to native)
+- Generates D3.js commit visualization with tooltips and layout
+- Logs everything to both terminal and logfile
+"""
+
+import os
+import sys
+import subprocess
+import shutil
+from pathlib import Path
+from datetime import datetime
+import webbrowser
+import yaml
+
+CONFIG_FILE = "github_push_config.yaml"
+LOG_FILE = "github_push_assistant.log"
+VISUALIZATION_DIR = Path("visualization")
+VISUALIZATION_FILE = VISUALIZATION_DIR / "commits.html"
+CASTFILE = "github_push_assistant_first_run.cast"
+
+
+def log(msg: str):
+    """Log message to terminal and logfile."""
+    timestamped = f"{datetime.now().isoformat()} {msg}"
+    print(timestamped)
+    with open(LOG_FILE, "a") as f:
+        f.write(timestamped + "\n")
+
+
+def run_cmd(cmd: str, check=False):
+    """Run shell command, tee output, log everything."""
+    log(f"$ {cmd}")
+    process = subprocess.Popen(
+        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+    )
+    output_lines = []
+    for line in iter(process.stdout.readline, ""):
+        if line:
+            print(line, end="")
+            with open(LOG_FILE, "a") as f:
+                f.write(line)
+            output_lines.append(line.strip())
+    process.stdout.close()
+    ret = process.wait()
+    if check and ret != 0:
+        log(f"❌ Command failed: {cmd} (exit {ret})")
+        sys.exit(ret)
+    return "\n".join(output_lines)
+
+
+def load_config():
+    if Path(CONFIG_FILE).exists():
+        with open(CONFIG_FILE, "r") as f:
+            return yaml.safe_load(f) or {}
+    return {}
+
+
+def save_config(cfg):
+    with open(CONFIG_FILE, "w") as f:
+        yaml.safe_dump(cfg, f)
+
+
+def check_tools():
+    for tool in ["git", "gh", "asciinema", "docker"]:
+        path = shutil.which(tool)
+        if path:
+            version = run_cmd(f"{tool} --version")
+            log(f"{tool} version: {version}")
+        else:
+            log(f"⚠️ {tool} not found in PATH")
+
+
+def docker_available():
+    """Return True if Docker is installed and daemon responds."""
+    if not shutil.which("docker"):
+        return False
+    try:
+        out = run_cmd("docker info", check=False)
+        return "Server Version" in out
+    except Exception:
+        return False
+
+
+def maybe_run_docker():
+    """Prompt user if they want to use Docker (optional)."""
+    if docker_available():
+        choice = input("🐳 Docker detected — run inside Docker? [y/N]: ").strip().lower()
+        if choice == "y":
+            try:
+                run_cmd(f"docker build -t github_push_assistant {os.getcwd()}", check=True)
+                log("🐳 Docker image built. Running container automatically...")
+                run_cmd(
+                    f"docker run -it -v {os.getcwd()}:/workspace github_push_assistant "
+                    f"python3 github_push_assistant.py --no-record"
+                )
+                sys.exit(0)
+            except Exception as e:
+                log(f"⚠️ Docker run failed: {e}. Falling back to native...")
+    else:
+        log("ℹ️ Docke

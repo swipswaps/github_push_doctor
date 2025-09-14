@@ -1,0 +1,263 @@
+#!/usr/bin/env python3
+"""
+GitHub Push Assistant (PRF-compliant, repo-aware edition)
+- Handles cloned repos vs. new repos correctly
+- Records first run with asciinema unless skipped
+- Runs Docker container if available (optional)
+- Generates D3.js commit visualization with improved readability
+- Logs everything to both terminal and logfile
+"""
+
+import os
+import sys
+import subprocess
+import shutil
+from pathlib import Path
+from datetime import datetime
+import webbrowser
+import yaml
+
+CONFIG_FILE = "github_push_config.yaml"
+LOG_FILE = "github_push_assistant.log"
+VISUALIZATION_DIR = Path("visualization")
+VISUALIZATION_FILE = VISUALIZATION_DIR / "commits.html"
+CASTFILE = "github_push_assistant_first_run.cast"
+
+
+def log(msg: str):
+    """Log message to terminal and logfile."""
+    timestamped = f"{datetime.now().isoformat()} {msg}"
+    print(timestamped)
+    with open(LOG_FILE, "a") as f:
+        f.write(timestamped + "\n")
+
+
+def run_cmd(cmd: str, check=False):
+    """Run shell command, tee output, log everything."""
+    log(f"$ {cmd}")
+    process = subprocess.Popen(
+        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+    )
+    output_lines = []
+    for line in iter(process.stdout.readline, ""):
+        if line:
+            print(line, end="")
+            with open(LOG_FILE, "a") as f:
+                f.write(line)
+            output_lines.append(line.strip())
+    process.stdout.close()
+    ret = process.wait()
+    if check and ret != 0:
+        log(f"❌ Command failed: {cmd} (exit {ret})")
+        sys.exit(ret)
+    return "\n".join(output_lines)
+
+
+def load_config():
+    if Path(CONFIG_FILE).exists():
+        with open(CONFIG_FILE, "r") as f:
+            return yaml.safe_load(f) or {}
+    return {}
+
+
+def save_config(cfg):
+    with open(CONFIG_FILE, "w") as f:
+        yaml.safe_dump(cfg, f)
+
+
+def check_tools():
+    for tool in ["git", "gh", "asciinema", "docker"]:
+        path = shutil.which(tool)
+        if path:
+            version = run_cmd(f"{tool} --version")
+            log(f"{tool} version: {version}")
+        else:
+            log(f"⚠️ {tool} not found in PATH")
+
+
+def ensure_remote(repo_name):
+    """Ensure GitHub remote exists and is usable."""
+    remotes = run_cmd("git remote", check=False).splitlines()
+    if "origin" in remotes:
+        log("✅ Remote 'origin' already exists, verifying URL")
+        run_cmd("git remote -v")
+    else:
+        log(f"🔧 Creating GitHub remote repo: {repo_name}")
+        run_cmd(f"gh repo create {repo_name} --source=. --public", check=False)
+        run_cmd(f"git remote add origin git@github.com:{os.getenv('GITHUB_USER', '')}/{repo_name}.git")
+
+
+def record_first_run():
+    if Path(CASTFILE).exists():
+        log(f"ℹ️ First run cast already exists: {CASTFILE}, skipping recording")
+        return
+    log(f"🎥 Starting asciinema recording: {CASTFILE}")
+    subprocess.run(
+        f"asciinema rec -y --overwrite {CASTFILE} "
+        f"--command 'python3 github_push_assistant.py --no-record 2>&1 | tee -a {LOG_FILE}'",
+        shell=True,
+        check=False,
+    )
+    log(f"✅ First-run recording done: {CASTFILE}")
+
+
+def build_and_run_docker():
+    try:
+        run_cmd(f"docker build -t github_push_assistant {os.getcwd()}")
+        log("🐳 Docker image built. Running container automatically...")
+        run_cmd(
+            f"docker run -it -v {os.getcwd()}:/workspace github_push_assistant "
+            f"python3 github_push_assistant.py --no-record"
+        )
+        sys.exit(0)
+    except Exception as e:
+        log(f"⚠️ Docker build/run failed: {e}. Continuing natively...")
+
+
+def generate_d3_visualization():
+    VISUALIZATION_DIR.mkdir(exist_ok=True)
+    commits = run_cmd('git log --pretty=format:"%H|%an|%ad|%s" --date=iso').splitlines()
+    if not commits:
+        log("⚠️ No commits found, skipping visualization")
+        return
+
+    data_entries = []
+    for i, c in enumerate(commits):
+        h, author, date, msg = c.split("|", 3)
+        data_entries.append(
+            {
+                "id": i,
+                "hash": h,
+                "author": author,
+                "date": date,
+                "message": msg,
+            }
+        )
+
+    js_data_file = VISUALIZATION_DIR / "commits_data.js"
+    js_data_file.write_text(f"const commits = {data_entries};")
+
+    html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>D3.js Commit Visualization</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  body {{ font-family: sans-serif; }}
+  .commit {{ cursor: pointer; }}
+  .tooltip {{
+    position: absolute;
+    padding: 6px;
+    background: #eee;
+    border: 1px solid #aaa;
+    border-radius: 4px;
+    pointer-events: none;
+    font-size: 12px;
+  }}
+</style>
+</head>
+<body>
+<h1>Commit History Visualization</h1>
+<svg id="chart" width="1200" height="500"></svg>
+<div id="tooltip" class="tooltip" style="display:none;"></div>
+<script src="commits_data.js"></script>
+<script>
+const svg = d3.select("#chart");
+const tooltip = d3.select("#tooltip");
+const spacing = 120;
+
+svg.selectAll("circle")
+   .data(commits)
+   .enter()
+   .append("circle")
+   .attr("class", "commit")
+   .attr("cx", (d,i) => i * spacing + 50)
+   .attr("cy", 200)
+   .attr("r", 25)
+   .style("fill", "steelblue")
+   .on("mouseover", (event,d) => {{
+        tooltip.style("display","block")
+               .style("left",(event.pageX+10)+"px")
+               .style("top",(event.pageY-20)+"px")
+               .html("<b>"+d.message+"</b><br>"+d.author+"<br>"+d.date);
+   }})
+   .on("mouseout", () => tooltip.style("display","none"));
+
+svg.selectAll("text")
+   .data(commits)
+   .enter()
+   .append("text")
+   .attr("x", (d,i) => i * spacing + 50)
+   .attr("y", 260)
+   .attr("text-anchor", "middle")
+   .text(d => d.id);
+</script>
+</body>
+</html>
+"""
+    VISUALIZATION_FILE.write_text(html_content)
+    log(f"✅ D3.js commit visualization generated at {VISUALIZATION_FILE}")
+    webbrowser.open(VISUALIZATION_FILE.resolve().as_uri())
+
+
+def main():
+    log("🔧 Running GitHub Push Assistant with enhanced visualization")
+    cfg = load_config()
+    check_tools()
+
+    proj = input(f"Project path [{os.getcwd()}]: ").strip() or os.getcwd()
+    proj = os.path.abspath(proj)
+    os.chdir(proj)
+    cfg["project_path"] = proj
+    save_config(cfg)
+    log(f"Working in: {proj}")
+
+    if shutil.which("docker"):
+        build_and_run_docker()
+
+    record_first_run()
+
+    repo_name = input(f"GitHub repo name [{Path(proj).name}]: ").strip() or Path(proj).name
+    cfg["repo_name"] = repo_name
+    save_config(cfg)
+
+    # Repo awareness: new vs. cloned
+    if not Path(".git").exists():
+        log("🔧 No .git detected, initializing new repo")
+        run_cmd("git init", check=True)
+    else:
+        log("ℹ️ Existing Git repo detected, skipping init")
+
+    run_cmd("gh auth status", check=False)
+    ensure_remote(repo_name)
+
+    # Ensure at least one commit
+    commits = run_cmd("git rev-list --count HEAD", check=False).strip()
+    if commits == "0":
+        log("🔧 No commits found, creating initial commit")
+        run_cmd("git add .", check=False)
+        run_cmd('git commit -m "Initial commit"', check=False)
+
+    # Normal commit/push flow
+    run_cmd("git add .", check=False)
+    msg = input("Commit message [update]: ").strip() or "update"
+    run_cmd(f'git commit -m "{msg}"', check=False)
+
+    # Ensure branch is main
+    run_cmd("git branch -M main", check=False)
+
+    # Pull + push
+    run_cmd("git pull --rebase origin main", check=False)
+    run_cmd("git push origin main", check=False)
+
+    generate_d3_visualization()
+    log("✅ Workflow complete with visualization")
+
+
+if __name__ == "__main__":
+    if "--no-record" in sys.argv:
+        main()
+    else:
+        main()

@@ -1,0 +1,195 @@
+#!/usr/bin/env python3
+"""
+GitHub Push Assistant (PRF-compliant, enhanced)
+- Handles Docker optionally; falls back safely if daemon unavailable
+- Records first run with asciinema unless opted out
+- Detects existing GitHub repos and pushes commits
+- Generates D3.js commit visualization and opens in browser
+- Logs all output to `github_push_assistant.log` with tee to terminal
+- Fully automated: run with `python3 github_push_assistant.py`
+"""
+
+import os
+import sys
+import subprocess
+import shutil
+from pathlib import Path
+from datetime import datetime
+import webbrowser
+import yaml
+
+CONFIG_FILE = "github_push_config.yaml"
+LOG_FILE = "github_push_assistant.log"
+VISUALIZATION_DIR = Path("visualization")
+VISUALIZATION_FILE = VISUALIZATION_DIR / "visualization.html"
+CASTFILE = "github_push_assistant_first_run.cast"
+
+def log(msg: str):
+    timestamp = datetime.now().isoformat()
+    print(f"{timestamp} {msg}")
+    with open(LOG_FILE, "a") as f:
+        f.write(f"{timestamp} {msg}\n")
+
+def run_cmd(cmd: str, check=False):
+    log(f"$ {cmd}")
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if result.stdout:
+        log(result.stdout.strip())
+    if result.stderr:
+        log(result.stderr.strip())
+    if check and result.returncode != 0:
+        log(f"❌ Command failed: {cmd}")
+        sys.exit(result.returncode)
+    return result.stdout.strip()
+
+def load_config():
+    if Path(CONFIG_FILE).exists():
+        with open(CONFIG_FILE, "r") as f:
+            return yaml.safe_load(f) or {}
+    return {}
+
+def save_config(cfg):
+    with open(CONFIG_FILE, "w") as f:
+        yaml.safe_dump(cfg, f)
+
+def check_tools():
+    for tool in ["git", "gh", "asciinema", "docker"]:
+        path = shutil.which(tool)
+        if path:
+            version = run_cmd(f"{tool} --version")
+            log(f"{tool} detected: {version}")
+        else:
+            log(f"⚠️ {tool} not found")
+
+def ensure_remote(repo_name):
+    remotes = run_cmd("git remote", check=False).splitlines()
+    if "origin" in remotes:
+        log("✅ Remote 'origin' exists. Will push to it.")
+    else:
+        log(f"🔧 Adding existing GitHub repo '{repo_name}' as origin...")
+        run_cmd(f"gh repo set-remote {repo_name} --push", check=False)
+
+def record_first_run():
+    if Path(CASTFILE).exists():
+        log(f"ℹ️ First run cast already exists: {CASTFILE}, skipping recording")
+        return
+    log(f"🎥 Starting asciinema recording: {CASTFILE}")
+    subprocess.run(
+        f"asciinema rec -y --overwrite {CASTFILE} --command 'python3 github_push_assistant.py --no-record 2>&1 | tee -a {LOG_FILE}'",
+        shell=True,
+        check=False
+    )
+    log(f"✅ First-run recording done: {CASTFILE}")
+
+def build_and_run_docker():
+    if not shutil.which("docker"):
+        log("ℹ️ Docker not installed, skipping Docker execution")
+        return False
+    try:
+        run_cmd(f"docker build -t github_push_assistant {os.getcwd()}", check=True)
+        log(f"🐳 Docker image built. Running container...")
+        run_cmd(f"docker run -it -v {os.getcwd()}:/workspace github_push_assistant python3 github_push_assistant.py --no-record")
+        return True
+    except Exception as e:
+        log(f"⚠️ Docker build/run failed: {e}. Falling back to direct execution")
+        return False
+
+def generate_d3_visualization():
+    VISUALIZATION_DIR.mkdir(exist_ok=True)
+    commits = run_cmd('git log --pretty=format:"%h|%s|%ad" --date=short').splitlines()
+    data_entries = []
+    for i, c in enumerate(commits):
+        h, msg, date = c.split("|", 2)
+        data_entries.append({
+            "x": i * 100 + 50,
+            "y": 200,
+            "hash": h,
+            "date": date,
+            "message": msg
+        })
+    html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>D3.js Commit Visualization</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  svg {{ font-family: sans-serif; }}
+  circle:hover {{ fill: orange; cursor: pointer; }}
+  text {{ font-size: 12px; }}
+</style>
+</head>
+<body>
+<h1>Commit History Visualization</h1>
+<svg id="chart" width="1000" height="400"></svg>
+<script>
+const commits = {data_entries};
+const svg = d3.select("#chart");
+svg.selectAll("circle")
+   .data(commits)
+   .enter()
+   .append("circle")
+   .attr("cx", d => d.x)
+   .attr("cy", d => d.y)
+   .attr("r", 20)
+   .style("fill", "steelblue")
+   .append("title")
+   .text(d => d.hash + ": " + d.message);
+
+svg.selectAll("text")
+   .data(commits)
+   .enter()
+   .append("text")
+   .attr("x", d => d.x)
+   .attr("y", d => d.y + 40)
+   .attr("text-anchor", "middle")
+   .text(d => d.message);
+</script>
+</body>
+</html>
+"""
+    VISUALIZATION_FILE.write_text(html_content)
+    log(f"✅ Visualization generated: {VISUALIZATION_FILE}")
+    webbrowser.open(VISUALIZATION_FILE.resolve().as_uri())
+
+def main():
+    log("🔧 Running GitHub Push Assistant with enhanced visualization")
+    cfg = load_config()
+    check_tools()
+
+    proj = input(f"Project path [{os.getcwd()}]: ").strip() or os.getcwd()
+    proj = os.path.abspath(proj)
+    os.chdir(proj)
+    cfg["project_path"] = proj
+    save_config(cfg)
+    log(f"Working in: {proj}")
+
+    # Optional Docker execution
+    if build_and_run_docker():
+        return
+
+    # Record first run if needed
+    if "--no-record" not in sys.argv:
+        record_first_run()
+
+    # Git / GitHub workflow
+    repo_name = input(f"GitHub repo name [{Path(proj).name}]: ").strip() or Path(proj).name
+    cfg["repo_name"] = repo_name
+    save_config(cfg)
+
+    run_cmd("git init", check=False)
+    run_cmd("gh auth status", check=False)
+    ensure_remote(repo_name)
+
+    run_cmd("git add .", check=False)
+    msg = input("Commit message [init]: ").strip() or "init"
+    run_cmd(f'git commit -m "{msg}"', check=False)
+    run_cmd("git push origin HEAD", check=False)
+
+    # D3 Visualization
+    generate_d3_visualization()
+    log("✅ Workflow complete. Visualization opened and push attempted.")
+
+if __name__ == "__main__":
+    main()

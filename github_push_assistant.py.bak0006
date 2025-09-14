@@ -1,0 +1,187 @@
+#!/usr/bin/env python3
+"""
+GitHub Push Assistant
+---------------------
+Automates GitHub repo setup, commits, pushes, asciinema recording,
+and D3.js visualization with full logging.
+
+Fixes:
+- Handles existing repos without failure
+- Docker is optional (graceful fallback)
+- Proper error logging instead of silent suppression
+"""
+
+import subprocess
+import sys
+import os
+import datetime
+import shutil
+import json
+
+LOG_FILE = "assistant.log"
+
+def log(message: str):
+    """Log to console and append to log file with timestamp."""
+    ts = datetime.datetime.now().isoformat()
+    line = f"{ts} {message}"
+    print(line)
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(line + "\n")
+
+def run(cmd, check=True, capture_output=False, text=True):
+    """Run shell command and stream output, tee to log file."""
+    log(f"$ {' '.join(cmd)}")
+    try:
+        result = subprocess.run(
+            cmd,
+            check=check,
+            capture_output=capture_output,
+            text=text
+        )
+        if result.stdout:
+            log(result.stdout.strip())
+        if result.stderr:
+            log(result.stderr.strip())
+        return result
+    except subprocess.CalledProcessError as e:
+        log(f"❌ Command failed: {' '.join(cmd)} (exit {e.returncode})")
+        if e.stdout:
+            log(e.stdout.strip())
+        if e.stderr:
+            log(e.stderr.strip())
+        if check:
+            sys.exit(1)
+        return e
+
+def check_tool(name, version_arg="--version"):
+    """Check if tool is installed and return version string if available."""
+    try:
+        result = run([name, version_arg], check=True, capture_output=True)
+        version = result.stdout.strip()
+        log(f"{name} version: {version}")
+        return version
+    except Exception as e:
+        log(f"⚠️ {name} not found: {e}")
+        return None
+
+def ensure_commit_exists():
+    """Ensure at least one commit exists before pushing/creating repo."""
+    result = run(["git", "rev-parse", "HEAD"], check=False, capture_output=True)
+    if result.returncode != 0:
+        log("ℹ️ No commits found, creating initial commit...")
+        with open("README.md", "w", encoding="utf-8") as f:
+            f.write("# Initial Commit\n")
+        run(["git", "add", "README.md"])
+        run(["git", "commit", "-m", "Initial commit"])
+
+def try_docker(project_path):
+    """Attempt to build and run docker, fallback if fails."""
+    docker_version = check_tool("docker", "--version")
+    if not docker_version:
+        log("ℹ️ Docker not installed, skipping container run.")
+        return False
+
+    log(f"ℹ️ Docker detected: {docker_version}")
+    build = run(["docker", "build", "-t", "github_push_assistant", project_path], check=False)
+    if build.returncode != 0:
+        log("⚠️ Docker build failed. Falling back to direct execution.")
+        return False
+
+    run([
+        "docker", "run", "-it",
+        "-v", f"{project_path}:/workspace",
+        "github_push_assistant",
+        "python3", "github_push_assistant.py", "--no-record"
+    ], check=False)
+
+    return True
+
+def generate_visualization():
+    """Generate visualization HTML using D3.js best practices."""
+    commits = []
+    try:
+        result = run(["git", "log", "--pretty=format:%h|%s|%ad", "--date=short"], capture_output=True)
+        for idx, line in enumerate(result.stdout.splitlines()):
+            parts = line.split("|")
+            if len(parts) == 3:
+                commits.append({
+                    "hash": parts[0],
+                    "message": parts[1],
+                    "date": parts[2],
+                    "x": 100 + idx * 120,
+                    "y": 200
+                })
+    except Exception as e:
+        log(f"⚠️ Could not fetch commits: {e}")
+
+    data_file = "commits.json"
+    with open(data_file, "w", encoding="utf-8") as f:
+        json.dump(commits, f, indent=2)
+
+    html_file = "visualization.html"
+    with open(html_file, "w", encoding="utf-8") as f:
+        f.write(f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>D3.js Commit Visualization</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  body {{ font-family: sans-serif; background: #fafafa; }}
+  circle {{ stroke: #333; stroke-width: 1px; }}
+  .label {{ font-size: 12px; }}
+</style>
+</head>
+<body>
+<h1>Commit History Visualization</h1>
+<svg id="chart" width="1000" height="400"></svg>
+<script>
+d3.json("{data_file}").then(commits => {{
+  const svg = d3.select("#chart");
+  svg.selectAll("circle")
+     .data(commits)
+     .enter()
+     .append("circle")
+     .attr("cx", d => d.x)
+     .attr("cy", d => d.y)
+     .attr("r", 20)
+     .style("fill", "steelblue");
+
+  svg.selectAll("text")
+     .data(commits)
+     .enter()
+     .append("text")
+     .attr("x", d => d.x)
+     .attr("y", d => d.y + 40)
+     .attr("class", "label")
+     .attr("text-anchor", "middle")
+     .text(d => d.message);
+}});
+</script>
+</body>
+</html>""")
+    log(f"✅ Visualization generated: {html_file}")
+
+def main():
+    log("🔧 Running GitHub Push Assistant with enhanced visualization")
+    check_tool("git")
+    check_tool("gh")
+    check_tool("asciinema")
+
+    project_path = input(f"Project path [{os.getcwd()}]: ").strip() or os.getcwd()
+    log(f"Working in: {project_path}")
+    os.chdir(project_path)
+
+    # Ensure git repo
+    if not os.path.exists(".git"):
+        run(["git", "init"])
+
+    ensure_commit_exists()
+
+    # Try Docker first, fallback to direct
+    if not try_docker(project_path):
+        log("ℹ️ Running directly without Docker")
+        generate_visualization()
+
+if __name__ == "__main__":
+    main()
