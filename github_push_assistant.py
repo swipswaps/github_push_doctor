@@ -1,81 +1,82 @@
 #!/usr/bin/env python3
-# github_push_assistant.py
-# PRF-compliant: fully automated GitHub push assistant with Docker fallback, asciinema recording, and improved D3 visualization
-# Handles auto Git identity, full verbatim logging, and multi-row D3 commit visualization
+"""
+github_push_assistant.py - PRF-compliant GitHub Push Assistant
+- Full verbatim output of git, gh, and system commands
+- Writes readable D3.js commit visualization
+- Handles Git user configuration interactively
+- Generates cd autofill script
+"""
 
 import os
 import subprocess
-import sys
 import json
 from datetime import datetime
 
 LOG_FILE = "github_push_assistant.log"
+VIZ_DIR = "visualization"
+VIZ_FILE = os.path.join(VIZ_DIR, "visualization.html")
+CD_SCRIPT = "cd_to_repo.sh"
 
 def log(msg):
-    """Log message with timestamp to terminal and log file."""
-    ts = datetime.now().isoformat()
-    line = f"{ts} {msg}"
-    print(line)
+    timestamp = datetime.now().isoformat()
     with open(LOG_FILE, "a") as f:
-        f.write(line + "\n")
+        f.write(f"{timestamp} {msg}\n")
+    print(f"{timestamp} {msg}")
 
-def run(cmd, capture=False):
-    """Run command, log it, capture output optionally."""
-    log(f"$ {cmd}")
+def run_cmd(cmd, capture_output=True):
+    """Run system command and log verbatim output"""
+    log(f"$ {' '.join(cmd)}")
     try:
-        if capture:
-            result = subprocess.run(cmd, shell=True, text=True,
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.STDOUT)
-            for l in result.stdout.splitlines():
-                print(l)
-            return result
+        if capture_output:
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+            out = result.stdout.strip()
+            err = result.stderr.strip()
+            if out:
+                log(out)
+            if err:
+                log(err)
+            return result.returncode, out, err
         else:
-            result = subprocess.run(cmd, shell=True)
-            return result
+            result = subprocess.run(cmd)
+            return result.returncode, "", ""
     except Exception as e:
-        log(f"❌ Exception running command '{cmd}': {e}")
-        return None
+        log(f"ERROR: {e}")
+        return 1, "", str(e)
 
-def ensure_git_identity():
-    """Check Git identity, prompt if missing."""
-    name = subprocess.run("git config user.name", shell=True, capture_output=True, text=True).stdout.strip()
-    email = subprocess.run("git config user.email", shell=True, capture_output=True, text=True).stdout.strip()
+def ensure_git_config():
+    """Prompt user for git name/email if missing and set globally"""
+    code, name_out, _ = run_cmd(["git", "config", "--global", "user.name"])
+    if not name_out.strip():
+        name = input("Git user.name not set. Enter your name: ")
+        run_cmd(["git", "config", "--global", "user.name", name])
+    code, email_out, _ = run_cmd(["git", "config", "--global", "user.email"])
+    if not email_out.strip():
+        email = input("Git user.email not set. Enter your email: ")
+        run_cmd(["git", "config", "--global", "user.email", email])
 
-    if not name:
-        name = input("Git user.name not set. Enter your name: ").strip()
-        run(f'git config --global user.name "{name}"')
-    else:
-        log(f"Git user.name detected: {name}")
-
-    if not email:
-        email = input("Git user.email not set. Enter your email: ").strip()
-        run(f'git config --global user.email "{email}"')
-    else:
-        log(f"Git user.email detected: {email}")
-
-def ensure_gh_auth():
-    """Check GitHub CLI authentication."""
-    result = run("gh auth status", capture=True)
-    if result.returncode != 0:
-        log("GitHub CLI not authenticated. Running gh auth login...")
-        run("gh auth login")
+def generate_cd_script():
+    """Generate cd autofill shell script"""
+    with open(CD_SCRIPT, "w") as f:
+        f.write(f"#!/bin/bash\ncd {os.getcwd()}\n")
+    os.chmod(CD_SCRIPT, 0o755)
+    log(f"CD autofill script generated: {CD_SCRIPT}")
 
 def get_commits():
-    """Return a list of commits for D3 visualization."""
-    result = subprocess.run("git log --pretty=format:'%h|%s|%ad' --date=short",
-                            shell=True, capture_output=True, text=True)
+    """Collect commits as list of dicts for D3 visualization"""
+    code, out, _ = run_cmd(["git", "log", "--pretty=format:{\"hash\":\"%h\", \"message\":\"%s\", \"date\":\"%ad\"}", "--date=short"])
     commits = []
-    for i, line in enumerate(result.stdout.splitlines()):
-        if not line.strip():
-            continue
-        h, msg, date = line.split("|", 2)
-        commits.append({"hash": h, "message": msg, "date": date})
-    return commits
+    if out.strip():
+        for line in out.splitlines():
+            try:
+                commits.append(json.loads(line))
+            except json.JSONDecodeError:
+                log(f"ERROR decoding commit line: {line}")
+    return commits[::-1]  # reverse chronological order
 
-def generate_d3_html(commits):
-    """Generate improved multi-row D3 visualization."""
-    html = f"""<!DOCTYPE html>
+def write_visualization(commits):
+    """Write multi-row wrapped D3.js visualization into visualization folder"""
+    os.makedirs(VIZ_DIR, exist_ok=True)
+    html_content = f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
@@ -89,7 +90,7 @@ def generate_d3_html(commits):
 </head>
 <body>
 <h1>Commit History Visualization</h1>
-<svg id="chart" width="1200" height="600" style="overflow-x:auto;"></svg>
+<svg id="chart" width="1200" height="600"></svg>
 <script>
 const commits = {json.dumps(commits)};
 const svg = d3.select("#chart");
@@ -120,15 +121,14 @@ svg.selectAll("text")
        text.each(function() {{
            const t = d3.select(this);
            const words = t.text().split(/\\s+/).reverse();
-           let word;
-           let line = [];
+           let word, line = [];
            const lineHeight = 1.1;
            let y = t.attr("y");
            let tspan = t.text(null).append("tspan").attr("x", t.attr("x")).attr("y", y);
-           while (word = words.pop()) {{
+           while(word = words.pop()) {{
                line.push(word);
                tspan.text(line.join(" "));
-               if (tspan.node().getComputedTextLength() > 180) {{
+               if(tspan.node().getComputedTextLength() > 180) {{
                    line.pop();
                    tspan.text(line.join(" "));
                    line = [word];
@@ -140,53 +140,57 @@ svg.selectAll("text")
    }});
 </script>
 </body>
-</html>"""
-    os.makedirs("visualization", exist_ok=True)
-    with open("visualization/visualization.html", "w") as f:
-        f.write(html)
-    log("✅ Visualization generated: visualization/visualization.html")
+</html>
+"""
+    with open(VIZ_FILE, "w") as f:
+        f.write(html_content)
+    log(f"✅ Visualization generated: {VIZ_FILE}")
 
 def main():
     log("🔧 Running GitHub Push Assistant with full verbatim output")
+    # Detect versions
+    run_cmd(["git", "--version"])
+    run_cmd(["gh", "--version"])
+    run_cmd(["asciinema", "--version"])
+    run_cmd(["docker", "--version"])
 
-    # Check required tools
-    for tool in ["git", "gh", "asciinema", "docker"]:
-        run(f"{tool} --version", capture=True)
+    project_path = input(f"Project path [{os.getcwd()}]: ").strip() or os.getcwd()
+    os.chdir(project_path)
+    log(f"Working in: {project_path}")
 
-    path = input(f"Project path [{os.getcwd()}]: ").strip() or os.getcwd()
-    log(f"Working in: {path}")
-    os.chdir(path)
+    # Docker build attempt
+    ret, _, _ = run_cmd(["docker", "build", "-t", "github_push_assistant", project_path])
+    if ret != 0:
+        log("⚠️ Docker build failed, falling back to direct execution")
 
-    # Docker optional
-    docker_available = subprocess.run("docker --version", shell=True, capture_output=True).returncode == 0
-    if docker_available:
-        build = subprocess.run(f"docker build -t github_push_assistant {path}", shell=True)
-        if build.returncode != 0:
-            log("⚠️ Docker build failed, falling back to direct execution")
-        else:
-            run(f"docker run -it -v {path}:/workspace github_push_assistant python3 github_push_assistant.py --no-record")
-            return
-    else:
-        log("ℹ️ Docker not available, running directly")
+    # Ensure git config
+    ensure_git_config()
 
-    # Ensure Git identity
-    ensure_git_identity()
+    # GitHub auth
+    run_cmd(["gh", "auth", "status"])
 
-    # Ensure GitHub auth
-    ensure_gh_auth()
+    # Init git repo
+    run_cmd(["git", "init"])
+    run_cmd(["git", "add", "."])
+    commit_message = input("Commit message [auto]: ").strip() or "auto"
+    run_cmd(["git", "commit", "-m", commit_message])
 
-    # Add/commit/push
-    run("git init")
-    run("git add .")
-    commit_msg = input("Commit message [auto]: ").strip() or "auto commit"
-    run(f'git commit -m "{commit_msg}"')
-    # Push to origin
-    run("git remote | grep origin || echo 'origin missing'")
-    run("git push origin HEAD")
+    # Push
+    ret, _, _ = run_cmd(["git", "remote", "grep", "origin"])
+    if ret != 0:
+        log("origin missing")
+    run_cmd(["git", "push", "origin", "HEAD"])
 
     # Generate visualization
     commits = get_commits()
-    generate_d3_html(commits)
+    if commits:
+        write_visualization(commits)
+    else:
+        log("⚠️ No commits found for visualization")
+
+    # Generate cd autofill script
+    generate_cd_script()
+    log("✅ Workflow complete. Visualization created and push attempted.")
 
 if __name__ == "__main__":
     main()

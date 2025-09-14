@@ -521,3 +521,35 @@ https://github.com/cli/cli/releases/tag/v2.75.0
 2025-09-14T12:37:37.886416 $ gh auth status
 2025-09-14T12:37:38.228384 $ git init
 2025-09-14T12:37:38.230966 $ git add .
+2025-09-14T12:38:14.020610 $ git commit -m "fixed push to github (maybe)"
+2025-09-14T12:38:14.134043 $ git remote | grep origin || echo 'origin missing'
+2025-09-14T12:38:14.137103 $ git push origin HEAD
+2025-09-14T12:38:14.952543 ✅ Visualization generated: visualization/visualization.html
+2025-09-14T13:00:24.472100 🔧 Running GitHub Push Assistant with full verbatim output
+2025-09-14T13:00:24.472175 $ git --version
+2025-09-14T13:00:24.474125 git version 2.50.1
+2025-09-14T13:00:24.474232 $ gh --version
+2025-09-14T13:00:24.507152 gh version 2.75.0 (2025-07-09)
+https://github.com/cli/cli/releases/tag/v2.75.0
+2025-09-14T13:00:24.507283 $ asciinema --version
+2025-09-14T13:00:24.696299 asciinema 2.4.0
+2025-09-14T13:00:24.696432 $ docker --version
+2025-09-14T13:00:24.710124 Docker version 28.3.2, build 578ccf6
+2025-09-14T13:00:59.438771 Working in: /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940/github_push_doctor
+2025-09-14T13:00:59.439026 $ docker build -t github_push_assistant /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940/github_push_doctor
+2025-09-14T13:00:59.496602 ERROR: Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?
+2025-09-14T13:00:59.496729 ⚠️ Docker build failed, falling back to direct execution
+2025-09-14T13:00:59.496786 $ git config --global user.name
+2025-09-14T13:00:59.497949 Jose Melendez
+2025-09-14T13:00:59.498105 $ git config --global user.email
+2025-09-14T13:00:59.499998 ihydrocarbon@gmail.com
+2025-09-14T13:00:59.500098 $ gh auth status
+2025-09-14T13:00:59.842077 github.com
+  ✓ Logged in to github.com account swipswaps (/home/owner/.config/gh/hosts.yml)
+  - Active account: true
+  - Git operations protocol: https
+  - Token: gho_************************************
+  - Token scopes: 'delete_repo', 'gist', 'read:org', 'repo', 'workflow'
+2025-09-14T13:00:59.842219 $ git init
+2025-09-14T13:00:59.844832 Reinitialized existing Git repository in /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940/github_push_doctor/.git/
+2025-09-14T13:00:59.844933 $ git add .
