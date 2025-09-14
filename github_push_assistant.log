@@ -553,3 +553,42 @@ https://github.com/cli/cli/releases/tag/v2.75.0
 2025-09-14T13:00:59.842219 $ git init
 2025-09-14T13:00:59.844832 Reinitialized existing Git repository in /home/owner/Documents/68c17e37-8f48-8331-80da-93ec75153940/github_push_doctor/.git/
 2025-09-14T13:00:59.844933 $ git add .
+2025-09-14T13:01:39.767074 $ git commit -m attempted vizualization.html fix
+2025-09-14T13:01:39.772714 [main c7c763b] attempted vizualization.html fix
+ 3 files changed, 334 insertions(+), 106 deletions(-)
+ create mode 100644 github_push_assistant.py.bak0009
+2025-09-14T13:01:39.772798 $ git remote grep origin
+2025-09-14T13:01:39.773877 error: unknown subcommand: `grep'
+usage: git remote [-v | --verbose]
+   or: git remote add [-t <branch>] [-m <master>] [-f] [--tags | --no-tags] [--mirror=<fetch|push>] <name> <url>
+   or: git remote rename [--[no-]progress] <old> <new>
+   or: git remote remove <name>
+   or: git remote set-head <name> (-a | --auto | -d | --delete | <branch>)
+   or: git remote [-v | --verbose] show [-n] <name>
+   or: git remote prune [-n | --dry-run] <name>
+   or: git remote [-v | --verbose] update [-p | --prune] [(<group> | <remote>)...]
+   or: git remote set-branches [--add] <name> <branch>...
+   or: git remote get-url [--push] [--all] <name>
+   or: git remote set-url [--push] <name> <newurl> [<oldurl>]
+   or: git remote set-url --add <name> <newurl>
+   or: git remote set-url --delete <name> <url>
+
+    -v, --[no-]verbose    be verbose; must be placed before a subcommand
+2025-09-14T13:01:39.773959 origin missing
+2025-09-14T13:01:39.773991 $ git push origin HEAD
+2025-09-14T13:01:40.965713 To https://github.com/swipswaps/github_push_doctor.git
+   09cef02..c7c763b  HEAD -> main
+2025-09-14T13:01:40.965817 $ git log --pretty=format:{"hash":"%h", "message":"%s", "date":"%ad"} --date=short
+2025-09-14T13:01:40.967429 {"hash":"c7c763b", "message":"attempted vizualization.html fix", "date":"2025-09-14"}
+{"hash":"09cef02", "message":"fixed push to github (maybe)", "date":"2025-09-14"}
+{"hash":"6caf896", "message":"fix recursive self initialization", "date":"2025-09-11"}
+{"hash":"f092354", "message":"fixed repo name change errors", "date":"2025-09-11"}
+{"hash":"bf503e8", "message":"fixed, linted, commented github_push_assistant with Docker, asciinema", "date":"2025-09-11"}
+{"hash":"ee53848", "message":"script logs all output to github_push_assistant.log with colors for human-readable transparency", "date":"2025-09-11"}
+{"hash":"f91db4c", "message":"interactive prompts handle configuration, Docker, commit, and push", "date":"2025-09-11"}
+{"hash":"99bb2c7", "message":"Docker integrat", "date":"2025-09-10"}
+{"hash":"8b821d9", "message":"updated .py to detect gh auth status prior to push", "date":"2025-09-10"}
+{"hash":"781bda6", "message":"cursor generated.bak, chatGPT upgraded", "date":"2025-09-10"}
+2025-09-14T13:01:40.967914 ✅ Visualization generated: visualization/visualization.html
+2025-09-14T13:01:40.968089 CD autofill script generated: cd_to_repo.sh
+2025-09-14T13:01:40.968139 ✅ Workflow complete. Visualization created and push attempted.
